@@ -1,10 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
+    "target": "ES2024",
     "module": "CommonJS",
     "moduleResolution": "node",
     "lib": [
-      "ESNext"
+      "ES2024"
     ],
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
