@@ -289,6 +289,49 @@ async function main() {
         assert(result.error!.includes('qwen3:4b'), `error should name the model, got: ${result.error}`);
     });
 
+    // --- checkOllamaAvailability prefix match tests ---
+
+    await test('checkOllamaAvailability prefix match: "qwen3" matches "qwen3:latest" in tags', async () => {
+        globalThis.fetch = createMockFetch([
+            ollamaHealthOk(),
+            ollamaTagsWithModel('qwen3:latest'),
+        ]);
+
+        const result = await (grader as any).checkOllamaAvailability('http://localhost:11434', 'qwen3');
+        assert(result.available === true, `prefix match should find qwen3:latest for "qwen3", got: ${JSON.stringify(result)}`);
+    });
+
+    await test('checkOllamaAvailability prefix match: "qwen3" matches "qwen3:4b" in tags', async () => {
+        globalThis.fetch = createMockFetch([
+            ollamaHealthOk(),
+            ollamaTagsWithModel('qwen3:4b'),
+        ]);
+
+        const result = await (grader as any).checkOllamaAvailability('http://localhost:11434', 'qwen3');
+        assert(result.available === true, `prefix match should find qwen3:4b for "qwen3", got: ${JSON.stringify(result)}`);
+    });
+
+    await test('checkOllamaAvailability exact match still works: "qwen3:4b" matches "qwen3:4b"', async () => {
+        globalThis.fetch = createMockFetch([
+            ollamaHealthOk(),
+            ollamaTagsWithModel('qwen3:4b'),
+        ]);
+
+        const result = await (grader as any).checkOllamaAvailability('http://localhost:11434', 'qwen3:4b');
+        assert(result.available === true, `exact match should still work, got: ${JSON.stringify(result)}`);
+    });
+
+    await test('checkOllamaAvailability rejects different tag: "qwen3:4b" does NOT match "qwen3:latest"', async () => {
+        globalThis.fetch = createMockFetch([
+            ollamaHealthOk(),
+            ollamaTagsWithModel('qwen3:latest'),
+        ]);
+
+        const result = await (grader as any).checkOllamaAvailability('http://localhost:11434', 'qwen3:4b');
+        assert(result.available === false, `should not match different tag, got: ${JSON.stringify(result)}`);
+        assert(result.error!.includes('not pulled'), `should say not pulled, got: ${result.error}`);
+    });
+
     // --- grade() integration tests ---
 
     await test('grade() tries Ollama before Gemini/Anthropic when no cloud keys are set', async () => {
