@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 phase: 02-local-llm-grader
 source: 02-01-SUMMARY.md, 02-02-SUMMARY.md, 02-03-SUMMARY.md, 02-04-SUMMARY.md, 02-05-SUMMARY.md
 started: 2026-03-08T22:30:00Z
-updated: 2026-03-08T23:10:00Z
+updated: 2026-03-08T22:56:01Z
 ---
 
 ## Current Test
@@ -47,7 +47,7 @@ skipped: 0
 ## Gaps
 
 - truth: "workspace bin/ is prepended to PATH in spawned bash processes, CLI tools executable by name, custom env vars preserved"
-  status: failed
+  status: resolved
   reason: "User reported: All 3 local-provider tests fail. PATH entry is /usr/local/sbin not /bin, EBUSY on temp dir cleanup, custom env var empty string instead of expected value"
   severity: major
   test: 4
@@ -63,7 +63,7 @@ skipped: 0
   debug_session: ""
 
 - truth: "Running an evaluation with Ollama produces 0.0-1.0 LLM scores using local model with no cloud API keys"
-  status: failed
+  status: resolved
   reason: "User reported: llm_rubric scored 0.00 despite Ollama running. qwen3:4b inference does not complete within timeout on ARM64 CPU. Success Criterion 1 not met."
   severity: blocker
   test: 5
