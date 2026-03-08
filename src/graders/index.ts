@@ -126,7 +126,7 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
 
         // Provider fallback chain: Ollama (local) -> Gemini (cloud) -> Anthropic (cloud)
         const ollamaHost = env?.OLLAMA_HOST || process.env.OLLAMA_HOST || 'http://localhost:11434';
-        const model = config.model || 'qwen3:4b';
+        const model = config.model || 'phi3.5:3.8b';
         const apiKey = env?.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
         const anthropicKey = env?.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
 
@@ -220,11 +220,11 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
     }
 
     private async callOllama(prompt: string, ollamaHost: string, config: GraderConfig): Promise<GraderResult | null> {
-        // Note: qwen3:4b is a thinking model — chain-of-thought tokens consume
-        // num_predict budget before the JSON answer. Users on CPU-only hardware
-        // should prefer a non-thinking model like phi3.5:3.8b via the `model`
-        // field in task.toml.
-        const model = config.model || 'qwen3:4b';
+        // Default: phi3.5:3.8b — non-thinking model, completes grading in ~14s
+        // on CPU. Avoid thinking models (e.g. qwen3:4b) as default — they spend
+        // their num_predict budget on <think> tokens before the JSON answer,
+        // producing empty responses or timeouts on CPU-only hardware.
+        const model = config.model || 'phi3.5:3.8b';
 
         try {
             const response = await fetch(`${ollamaHost}/api/generate`, {
