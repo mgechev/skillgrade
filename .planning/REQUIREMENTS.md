@@ -18,24 +18,24 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Local LLM Grading
 
-- [ ] **GRADE-01**: Ollama-backed LLM grader replacing cloud Gemini/Anthropic API calls in LLMGrader
-- [ ] **GRADE-02**: Grader model must fit on default GitHub runner (4 vCPU, 16GB RAM, 14GB SSD — ubuntu-latest amd64 or ubuntu-24.04-arm arm64 preferred)
-- [ ] **GRADE-03**: Each trial must complete grading within 3-5 minutes max
-- [ ] **GRADE-04**: Model selection configurable via task.toml grader config (model field)
-- [ ] **GRADE-05**: Existing rubric prompt files (prompts/*.md) reused unchanged
-- [ ] **GRADE-06**: Robust structured JSON output parsing with fallback for malformed local model output
-- [ ] **GRADE-07**: Temperature=0 for deterministic grading behavior
+- [x] **GRADE-01**: Ollama-backed LLM grader replacing cloud Gemini/Anthropic API calls in LLMGrader
+- [x] **GRADE-02**: Grader model must fit on default GitHub runner (4 vCPU, 16GB RAM, 14GB SSD — ubuntu-latest amd64 or ubuntu-24.04-arm arm64 preferred)
+- [x] **GRADE-03**: Each trial must complete grading within 3-5 minutes max
+- [x] **GRADE-04**: Model selection configurable via task.toml grader config (model field)
+- [x] **GRADE-05**: Existing rubric prompt files (prompts/*.md) reused unchanged
+- [x] **GRADE-06**: Robust structured JSON output parsing with fallback for malformed local model output
+- [x] **GRADE-07**: Temperature=0 for deterministic grading behavior
 - [ ] **GRADE-08**: Deterministic grader must still score 1.0 (local LLM grader does not break existing deterministic grading)
 
 ### Task Structure
 
-- [ ] **TASK-01**: Superlint SKILL.md has agent skill frontmatter for auto-discovery by agent CLIs
+- [x] **TASK-01**: Superlint SKILL.md has agent skill frontmatter for auto-discovery by agent CLIs
 
 ### Ollama Integration
 
-- [ ] **OLLAMA-01**: Ollama health check before evaluation starts (fail fast with actionable error)
-- [ ] **OLLAMA-02**: Model availability check (verify required model is pulled)
-- [ ] **OLLAMA-03**: Graceful degradation when Ollama is absent (fall back to cloud graders if API keys present, or skip LLM grading with warning)
+- [x] **OLLAMA-01**: Ollama health check before evaluation starts (fail fast with actionable error)
+- [x] **OLLAMA-02**: Model availability check (verify required model is pulled)
+- [x] **OLLAMA-03**: Graceful degradation when Ollama is absent (fall back to cloud graders if API keys present, or skip LLM grading with warning)
 
 ## v2 Requirements
 
@@ -94,18 +94,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CI-04 | Phase 3 | Pending |
 | CI-05 | Phase 3 | Pending |
 | CI-06 | Phase 3 | Pending |
-| GRADE-01 | Phase 2 | Pending |
-| GRADE-02 | Phase 2 | Pending |
-| GRADE-03 | Phase 2 | Pending |
-| GRADE-04 | Phase 2 | Pending |
-| GRADE-05 | Phase 2 | Pending |
-| GRADE-06 | Phase 2 | Pending |
-| GRADE-07 | Phase 2 | Pending |
+| GRADE-01 | Phase 2 | Complete |
+| GRADE-02 | Phase 2 | Complete |
+| GRADE-03 | Phase 2 | Complete |
+| GRADE-04 | Phase 2 | Complete |
+| GRADE-05 | Phase 2 | Complete |
+| GRADE-06 | Phase 2 | Complete |
+| GRADE-07 | Phase 2 | Complete |
 | GRADE-08 | Phase 2 | Pending |
-| TASK-01 | Phase 2 | Pending |
-| OLLAMA-01 | Phase 2 | Pending |
-| OLLAMA-02 | Phase 2 | Pending |
-| OLLAMA-03 | Phase 2 | Pending |
+| TASK-01 | Phase 2 | Complete |
+| OLLAMA-01 | Phase 2 | Complete |
+| OLLAMA-02 | Phase 2 | Complete |
+| OLLAMA-03 | Phase 2 | Complete |
 
 **Coverage:**
 - v1 requirements: 18 total
