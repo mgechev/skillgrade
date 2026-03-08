@@ -18,6 +18,8 @@ export interface GraderConfig {
     rubric?: string;          // for llm_rubric — path relative to task dir
     model?: string;           // for llm_rubric
     weight: number;
+    timeout_ms?: number;      // for llm_rubric — grader response timeout (default: 60000)
+    num_ctx?: number;         // for llm_rubric — Ollama context window size (default: 4096)
 }
 
 export interface TaskConfig {
