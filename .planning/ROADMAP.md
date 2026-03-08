@@ -49,7 +49,7 @@ Plans:
 - [x] 02-03-PLAN.md -- Gap closure: fix prefix match logic bug in checkOllamaAvailability model name matching
 - [x] 02-04-PLAN.md -- Gap closure: prepend workspace bin/ to PATH in LocalProvider.runCommand
 - [x] 02-05-PLAN.md -- Gap closure: verify Node.js environment for LocalProvider subprocesses (human)
-- [ ] 02-06-PLAN.md -- Gap closure: fix LocalProvider PATH separator for MSYS2 bash and suppress BASH_ENV
+- [x] 02-06-PLAN.md -- Gap closure: fix LocalProvider PATH separator for MSYS2 bash and suppress BASH_ENV
 - [ ] 02-07-PLAN.md -- Gap closure: fix Ollama grader timeout (60s), add num_ctx 4096, surface grader failure details
 
 ### Phase 3: CI Evaluation Pipeline
@@ -74,5 +74,5 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. CI Foundation | 1/1 | Complete | 2026-03-08 |
-| 2. Local LLM Grader | 5/7 | Gap closure in progress | - |
+| 2. Local LLM Grader | 6/7 | In Progress | - |
 | 3. CI Evaluation Pipeline | 0/? | Not started | - |
