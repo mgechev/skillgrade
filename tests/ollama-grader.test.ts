@@ -184,7 +184,7 @@ async function main() {
         assert(result === null, 'result should be null on connection error');
     });
 
-    await test('callOllama sends correct request body (model, prompt, stream:false, format schema, temperature:0, num_predict:2048)', async () => {
+    await test('callOllama sends correct request body (model, prompt, stream:false, temperature:0, num_predict:2048, no format)', async () => {
         let capturedBody: any = null;
 
         globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -209,10 +209,7 @@ async function main() {
         assert(capturedBody.model === 'qwen3:4b', `model should be qwen3:4b, got: ${capturedBody.model}`);
         assert(capturedBody.prompt === 'my test prompt', 'prompt should match');
         assert(capturedBody.stream === false, 'stream should be false');
-        assert(capturedBody.format !== undefined, 'format should be set');
-        assert(capturedBody.format.type === 'object', 'format.type should be object');
-        assert(capturedBody.format.properties.score !== undefined, 'format should have score property');
-        assert(capturedBody.format.properties.reasoning !== undefined, 'format should have reasoning property');
+        assert(capturedBody.format === undefined, 'format should not be set (incompatible with thinking models)');
         assert(capturedBody.options.temperature === 0, `temperature should be 0, got: ${capturedBody.options.temperature}`);
         assert(capturedBody.options.num_predict === 2048, `num_predict should be 2048, got: ${capturedBody.options.num_predict}`);
     });

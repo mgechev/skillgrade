@@ -230,14 +230,6 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
                     model,
                     prompt,
                     stream: false,
-                    format: {
-                        type: 'object',
-                        properties: {
-                            score: { type: 'number' },
-                            reasoning: { type: 'string' },
-                        },
-                        required: ['score', 'reasoning'],
-                    },
                     options: {
                         temperature: 0,
                         num_predict: 2048,
