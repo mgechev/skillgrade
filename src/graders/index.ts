@@ -220,6 +220,10 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
     }
 
     private async callOllama(prompt: string, ollamaHost: string, config: GraderConfig): Promise<GraderResult | null> {
+        // Note: qwen3:4b is a thinking model — chain-of-thought tokens consume
+        // num_predict budget before the JSON answer. Users on CPU-only hardware
+        // should prefer a non-thinking model like phi3.5:3.8b via the `model`
+        // field in task.toml.
         const model = config.model || 'qwen3:4b';
 
         try {
@@ -233,9 +237,10 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
                     options: {
                         temperature: 0,
                         num_predict: 2048,
+                        num_ctx: config.num_ctx ?? 4096,
                     },
                 }),
-                signal: AbortSignal.timeout(300000), // 5 min timeout for generation
+                signal: AbortSignal.timeout(config.timeout_ms ?? 60000),
             });
 
             if (!response.ok) {
