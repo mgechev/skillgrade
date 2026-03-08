@@ -41,12 +41,14 @@ Plans:
   3. Starting an evaluation when the required model is not pulled fails immediately with a message naming the missing model
   4. Existing deterministic graders (test.sh) still score 1.0 on the superlint task -- local LLM grading does not break them
   5. When Ollama is absent but cloud API keys are present, grading falls back to cloud graders with a warning (graceful degradation)
-**Plans**: 3 plans
+**Plans**: 5 plans
 
 Plans:
 - [x] 02-01-PLAN.md -- Ollama grader integration: callOllama with retry, health/model checks, fallback chain, and SKILL.md frontmatter
 - [x] 02-02-PLAN.md -- Regression verification: confirm deterministic grader still scores 1.0, user verifies with real Ollama
 - [ ] 02-03-PLAN.md -- Gap closure: fix prefix match logic bug in checkOllamaAvailability model name matching
+- [ ] 02-04-PLAN.md -- Gap closure: prepend workspace bin/ to PATH in LocalProvider.runCommand
+- [ ] 02-05-PLAN.md -- Gap closure: verify Node.js environment for LocalProvider subprocesses (human)
 
 ### Phase 3: CI Evaluation Pipeline
 **Goal**: PRs automatically run skill evaluations with the local LLM grader on GitHub runners, with results available for cross-run comparison
@@ -70,5 +72,5 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. CI Foundation | 1/1 | Complete | 2026-03-08 |
-| 2. Local LLM Grader | 2/3 | Gap closure | - |
+| 2. Local LLM Grader | 2/5 | Gap closure | - |
 | 3. CI Evaluation Pipeline | 0/? | Not started | - |
