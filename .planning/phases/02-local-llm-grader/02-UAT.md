@@ -67,7 +67,7 @@ skipped: 0
   reason: "User reported: llm_rubric scored 0.00 despite Ollama running. qwen3:4b inference does not complete within timeout on ARM64 CPU. Success Criterion 1 not met."
   severity: blocker
   test: 5
-  root_cause: "Three compounding issues: (1) Hardcoded AbortSignal.timeout(300000) at src/graders/index.ts:238 is 5 min but should be ~60s for grader response (5 min was the trial budget, not grader budget). (2) qwen3:4b is a thinking model that generates chain-of-thought tokens before the answer, consuming most of num_predict:2048 budget on thinking. (3) Default num_ctx not set -- Ollama allocates full 40960 context window for a ~500-token prompt, wasting compute. (4) Silent failure -- evalRunner.ts prints score but not details, hiding the timeout reason."
+  root_cause: "Three compounding issues: (1) Hardcoded AbortSignal.timeout(300000) at src/graders/index.ts:238 is 5 min but should be ~60s for grader response (5 min was the trial budget, not grader budget). (2) qwen3:4b is a thinking model that generates chain-of-thought tokens before the answer, consuming most of num_predict:2048 budget on thinking. (3) No explicit num_ctx set -- Ollama defaults to 2048 (NOT model's native 32,768), which may silently truncate grading prompt (~825 tokens) + response budget (2048) = ~2900 tokens needed. At 2048 default, prompt is truncated from beginning with no warning. (4) Silent failure -- evalRunner.ts prints score but not details, hiding the timeout reason."
   artifacts:
     - path: "src/graders/index.ts"
       issue: "Line 238: hardcoded 300s timeout. Line 129/223: default model qwen3:4b is a thinking model. Line 250-253: error logged as console.warn only. No num_ctx set in Ollama API call."
@@ -77,7 +77,7 @@ skipped: 0
       issue: "Lines 51-53: output loop prints score but not details when score is 0"
   missing:
     - "Reduce grader timeout to 60s (1 min) -- grading a single response should not take 5 min"
-    - "Set num_ctx in Ollama API call to a small value (e.g. 4096) -- grading prompt is ~500 tokens"
+    - "Set explicit num_ctx in Ollama API call (default 4096) -- Ollama defaults to 2048 which silently truncates prompt (~825 tokens) + response (2048) = ~2900 tokens needed"
     - "Make timeout_ms configurable via GraderConfig / task.toml"
     - "Switch default model to a non-thinking model (e.g. phi3.5:3.8b) or make model configurable per task"
     - "Surface grader failure details in evalRunner output when score is 0"

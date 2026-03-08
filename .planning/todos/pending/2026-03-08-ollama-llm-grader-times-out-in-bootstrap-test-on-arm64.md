@@ -26,7 +26,7 @@ Three compounding factors cause the timeout:
 
 2. **Thinking model overhead**: `qwen3:4b` is a "thinking" model that generates `<think>...</think>` chain-of-thought tokens before producing the JSON answer. These thinking tokens consume most of the `num_predict: 2048` budget, at ~5-10 tokens/sec on CPU that's 200-400s of thinking before any answer starts.
 
-3. **Oversized context window**: No `num_ctx` is set in the Ollama API call, so Ollama allocates the model's full default context (40,960 tokens for qwen3:4b). The grading prompt is only ~500 tokens. Setting `num_ctx: 4096` would dramatically reduce memory/compute overhead.
+3. **Silent prompt truncation**: No `num_ctx` is set in the Ollama API call, so Ollama uses its default of 2048 tokens (NOT the model's native 32,768). The grading prompt (~825 tokens) + response budget (num_predict: 2048) needs ~2900 tokens total. At num_ctx: 2048, the prompt is silently truncated from the beginning -- no error, no warning in the API response. Setting `num_ctx: 4096` ensures the full prompt fits with headroom.
 
 4. **Silent failure**: `evalRunner.ts` prints `llm_rubric: 0.00` but never surfaces `GraderResult.details`, hiding the timeout reason from the user.
 
@@ -34,7 +34,7 @@ Three compounding factors cause the timeout:
 
 Required fixes (Phase 2 gap closure):
 - **Reduce grader timeout to 60s** -- grading a single response should not take 5 min
-- **Set `num_ctx` in Ollama API call** to a small value (e.g., 4096) -- grading prompt is ~500 tokens, no need for 40K context
+- **Set explicit `num_ctx` in Ollama API call** (default 4096) -- Ollama defaults to 2048 which silently truncates prompt+response (~2900 tokens needed)
 - **Make `timeout_ms` configurable** via `GraderConfig` / `task.toml` for tasks that need longer
 - **Surface grader failure details** in evalRunner output when score is 0
 - **Consider non-thinking model default** (e.g., `phi3.5:3.8b`) or document that thinking models are slow on CPU-only hardware
