@@ -6,7 +6,7 @@ Evaluation framework for [Agent Skills](https://agentskills.io/home). Inspired b
 
 ## Getting Started
 
-**Prerequisites**: Node.js 20+, npm, Docker
+**Prerequisites**: Node.js 24+, npm, Docker
 
 ```bash
 npm install
