@@ -240,7 +240,7 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
                     },
                     options: {
                         temperature: 0,
-                        num_predict: 512,
+                        num_predict: 2048,
                     },
                 }),
                 signal: AbortSignal.timeout(300000), // 5 min timeout for generation

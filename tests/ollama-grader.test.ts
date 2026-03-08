@@ -184,7 +184,7 @@ async function main() {
         assert(result === null, 'result should be null on connection error');
     });
 
-    await test('callOllama sends correct request body (model, prompt, stream:false, format schema, temperature:0, num_predict:512)', async () => {
+    await test('callOllama sends correct request body (model, prompt, stream:false, format schema, temperature:0, num_predict:2048)', async () => {
         let capturedBody: any = null;
 
         globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -214,7 +214,7 @@ async function main() {
         assert(capturedBody.format.properties.score !== undefined, 'format should have score property');
         assert(capturedBody.format.properties.reasoning !== undefined, 'format should have reasoning property');
         assert(capturedBody.options.temperature === 0, `temperature should be 0, got: ${capturedBody.options.temperature}`);
-        assert(capturedBody.options.num_predict === 512, `num_predict should be 512, got: ${capturedBody.options.num_predict}`);
+        assert(capturedBody.options.num_predict === 2048, `num_predict should be 2048, got: ${capturedBody.options.num_predict}`);
     });
 
     // --- callOllamaWithRetry tests ---
