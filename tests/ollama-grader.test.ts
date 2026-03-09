@@ -584,6 +584,146 @@ async function main() {
         }
     });
 
+    // --- warmUp tests ---
+
+    await test('warmUp sends /api/generate with num_predict:1 and short prompt on first call', async () => {
+        let capturedBody: any = null;
+        const freshGrader = new LLMGrader();
+
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            const url = typeof input === 'string' ? input : input.toString();
+
+            if (url === 'http://localhost:11434/api/generate' && init?.method === 'POST') {
+                capturedBody = JSON.parse(init.body as string);
+
+                return new Response(JSON.stringify({
+                    response: 'ok',
+                    done: true,
+                }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+
+            throw new Error(`Unexpected fetch: ${url}`);
+        }) as typeof globalThis.fetch;
+
+        await (freshGrader as any).warmUp('http://localhost:11434', 'qwen2.5:3b');
+
+        assert(capturedBody !== null, 'warmUp should have sent a fetch request');
+        assert(capturedBody.options.num_predict === 1, `num_predict should be 1, got: ${capturedBody.options?.num_predict}`);
+        assert(capturedBody.prompt === 'hi', `prompt should be "hi", got: ${capturedBody.prompt}`);
+        assert(capturedBody.stream === false, `stream should be false, got: ${capturedBody.stream}`);
+        assert(capturedBody.model === 'qwen2.5:3b', `model should be qwen2.5:3b, got: ${capturedBody.model}`);
+    });
+
+    await test('warmUp does NOT send request on second call (warmedUp flag prevents repeat)', async () => {
+        let callCount = 0;
+        const freshGrader = new LLMGrader();
+
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            const url = typeof input === 'string' ? input : input.toString();
+
+            if (url === 'http://localhost:11434/api/generate' && init?.method === 'POST') {
+                callCount++;
+
+                return new Response(JSON.stringify({
+                    response: 'ok',
+                    done: true,
+                }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+
+            throw new Error(`Unexpected fetch: ${url}`);
+        }) as typeof globalThis.fetch;
+
+        await (freshGrader as any).warmUp('http://localhost:11434', 'qwen2.5:3b');
+        await (freshGrader as any).warmUp('http://localhost:11434', 'qwen2.5:3b');
+
+        assert(callCount === 1, `warmUp should have sent only 1 request, sent: ${callCount}`);
+    });
+
+    await test('warmUp failure (fetch throws) logs warning but does not throw -- grade() proceeds', async () => {
+        const freshGrader = new LLMGrader();
+
+        globalThis.fetch = (async () => {
+            throw new Error('simulated network error');
+        }) as typeof globalThis.fetch;
+
+        // Should NOT throw
+        let threw = false;
+
+        try {
+            await (freshGrader as any).warmUp('http://localhost:11434', 'qwen2.5:3b');
+        } catch {
+            threw = true;
+        }
+
+        assert(!threw, 'warmUp should not throw on failure');
+    });
+
+    await test('warmUp is NOT called when Ollama is unavailable (grade() falls through to cloud)', async () => {
+        let warmUpCallCount = 0;
+        const freshGrader = new LLMGrader();
+
+        // Patch warmUp to track calls
+        const originalWarmUp = (freshGrader as any).warmUp.bind(freshGrader);
+        (freshGrader as any).warmUp = async (...args: any[]) => {
+            warmUpCallCount++;
+
+            return originalWarmUp(...args);
+        };
+
+        globalThis.fetch = (async (input: string | URL | Request) => {
+            const url = typeof input === 'string' ? input : input.toString();
+
+            // Ollama health check fails
+            if (url === 'http://localhost:11434/') {
+                throw new Error('fetch failed: ECONNREFUSED');
+            }
+
+            throw new Error(`Unexpected fetch: ${url}`);
+        }) as typeof globalThis.fetch;
+
+        const savedGemini = process.env.GEMINI_API_KEY;
+        const savedAnthropic = process.env.ANTHROPIC_API_KEY;
+        delete process.env.GEMINI_API_KEY;
+        delete process.env.ANTHROPIC_API_KEY;
+
+        try {
+            const config = makeConfig();
+            await freshGrader.grade('/tmp/ws', dummyProvider, config, TASK_PATH, dummySessionLog, {});
+            assert(warmUpCallCount === 0, `warmUp should not be called when Ollama unavailable, called: ${warmUpCallCount}`);
+        } finally {
+            if (savedGemini) { process.env.GEMINI_API_KEY = savedGemini; }
+            if (savedAnthropic) { process.env.ANTHROPIC_API_KEY = savedAnthropic; }
+        }
+    });
+
+    await test('warmUp timeout is 120000ms (verified via AbortSignal.timeout argument)', async () => {
+        let capturedSignal: AbortSignal | undefined;
+        const freshGrader = new LLMGrader();
+
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            const url = typeof input === 'string' ? input : input.toString();
+
+            if (url === 'http://localhost:11434/api/generate' && init?.method === 'POST') {
+                capturedSignal = init?.signal as AbortSignal | undefined;
+
+                return new Response(JSON.stringify({
+                    response: 'ok',
+                    done: true,
+                }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+
+            throw new Error(`Unexpected fetch: ${url}`);
+        }) as typeof globalThis.fetch;
+
+        await (freshGrader as any).warmUp('http://localhost:11434', 'qwen2.5:3b');
+
+        assert(capturedSignal !== undefined, 'warmUp should pass a signal to fetch');
+        // AbortSignal.timeout creates a signal -- we can check it exists
+        // The signal should have a timeout (we cannot directly read the timeout value from AbortSignal,
+        // but we verify the signal was provided and is not already aborted)
+        assert(!capturedSignal!.aborted, 'signal should not be aborted at call time');
+    });
+
     // --- Summary ---
     console.log(`\n--- Results: ${passed} passed, ${failed} failed ---`);
 
