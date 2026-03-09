@@ -103,6 +103,32 @@ async function runTests() {
         failed++;
     }
 
+    // Test 4: BASH_ENV and ENV are not present in child process environment
+    try {
+        const workspace = path.join(os.tmpdir(), `test-provider-${Date.now()}`);
+        await fs.ensureDir(path.join(workspace, 'bin'));
+
+        // Check if BASH_ENV and ENV exist as keys in the child env
+        const result = await provider.runCommand(workspace, 'echo "BASH_ENV=${BASH_ENV+SET}" && echo "ENV=${ENV+SET}"');
+        const lines = result.stdout.trim().split('\n');
+        const bashEnvLine = lines.find(l => l.startsWith('BASH_ENV=')) || '';
+        const envLine = lines.find(l => l.startsWith('ENV=')) || '';
+
+        // ${VAR+SET} expands to "SET" if variable is set (even if empty), nothing if unset
+        assert(!bashEnvLine.includes('SET'),
+            `Expected BASH_ENV to be unset in child env, but it was set: ${bashEnvLine}`);
+        assert(!envLine.includes('SET'),
+            `Expected ENV to be unset in child env, but it was set: ${envLine}`);
+        assert(result.exitCode === 0, `Expected exit code 0, got ${result.exitCode}`);
+
+        await removeWithRetry(workspace);
+        console.log('  PASS: BASH_ENV and ENV are not present in child env');
+        passed++;
+    } catch (e: any) {
+        console.error(`  FAIL: BASH_ENV and ENV are not present in child env - ${e.message}`);
+        failed++;
+    }
+
     console.log(`\nResults: ${passed} passed, ${failed} failed out of ${passed + failed}`);
 
     if (failed > 0) {
