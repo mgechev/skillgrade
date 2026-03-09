@@ -122,7 +122,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None.
+1. Add lightweight Ollama model warmup to LLMGrader (area: grader)
 
 ### Roadmap Evolution
 
