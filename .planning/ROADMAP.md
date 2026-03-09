@@ -42,7 +42,7 @@ Plans:
   3. Starting an evaluation when the required model is not pulled fails immediately with a message naming the missing model
   4. Existing deterministic graders (test.sh) still score 1.0 on the superlint task -- local LLM grading does not break them
   5. When Ollama is absent but cloud API keys are present, grading falls back to cloud graders with a warning (graceful degradation)
-**Plans**: 7 plans
+**Plans**: 8 plans
 
 Plans:
 - [x] 02-01-PLAN.md -- Ollama grader integration: callOllama with retry, health/model checks, fallback chain, and SKILL.md frontmatter
@@ -52,6 +52,7 @@ Plans:
 - [x] 02-05-PLAN.md -- Gap closure: verify Node.js environment for LocalProvider subprocesses (human)
 - [x] 02-06-PLAN.md -- Gap closure: fix LocalProvider PATH separator for MSYS2 bash and suppress BASH_ENV
 - [x] 02-07-PLAN.md -- Gap closure: fix Ollama grader timeout (60s), add num_ctx 4096, surface grader failure details
+- [ ] 02-08-PLAN.md -- Gap closure: fix spawn to use bash --norc --noprofile, PATH deduplication, and sanitization assertion
 
 ### Phase 2.1: Optimize Grader Model Selection _(INSERTED)_
 **Goal**: Find the best grader model for both local ARM64 (Snapdragon X Elite) and ubuntu-24.04-arm CI runners, using Phase 2 supplementary research as a starting point. Verify improvements through direct Ollama API requests and the skill-eval e2e bootstrap test.
@@ -89,6 +90,6 @@ Phases execute in numeric order: 1 -> 2 -> 2.1 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. CI Foundation | 1/1 | Complete | 2026-03-08 |
-| 2. Local LLM Grader | 7/7 | Complete | 2026-03-08 |
+| 2. Local LLM Grader | 7/8 | In progress (gap closure) | - |
 | 2.1. Optimize Grader Model Selection | 0/? | Not started | - |
 | 3. CI Evaluation Pipeline | 0/? | Not started | - |
