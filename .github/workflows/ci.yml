@@ -42,7 +42,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-node
-      - run: |
-          npm run test:analytics
-          npm run test:ollama-grader
-          npm run test:local-provider
+      - run: npm run test:analytics
+      - run: npm run test:ollama-grader
+      - run: npm run test:local-provider
