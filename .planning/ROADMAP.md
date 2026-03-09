@@ -82,6 +82,9 @@ Plans:
   4. Dependencies (Ollama, agent CLIs, npm packages) are cached across CI runs to reduce setup time
 **Plans**: TBD
 
+Todos to incorporate:
+- [ ] Add lightweight Ollama model warmup to LLMGrader — send minimal `num_predict:1` request before first grading call to eliminate cold-start timeout waste (see `.planning/todos/pending/2026-03-09-add-lightweight-ollama-model-warmup-to-llmgrader.md`)
+
 Plans:
 - [ ] 03-01: TBD
 
