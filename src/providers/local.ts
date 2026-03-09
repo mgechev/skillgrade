@@ -119,14 +119,28 @@ export class LocalProvider implements EnvironmentProvider {
             delete baseEnv['BASH_ENV'];
             delete baseEnv['ENV'];
 
+            const bashPath = process.platform === 'win32' ? resolveGitBash() : 'bash';
+
+            // On Windows, bash -c is non-login so /etc/profile is not sourced.
+            // MSYS2's /usr/bin (grep, sed, touch, etc.) must be added explicitly.
+            const gitUsrBin = process.platform === 'win32' && bashPath !== 'bash'
+                ? path.dirname(bashPath)
+                : '';
+            const pathParts = [binDir];
+
+            if (gitUsrBin) {
+                pathParts.push(gitUsrBin);
+            }
+
+            pathParts.push(currentPath);
+
             const childEnv = {
                 ...baseEnv,
                 ...env,
-                PATH: `${binDir}${sep}${currentPath}`,
+                PATH: pathParts.join(sep),
             };
 
-            const bashPath = process.platform === 'win32' ? resolveGitBash() : 'bash';
-            const child = spawn(bashPath, ['--norc', '--noprofile', '-c', command], {
+            const child = spawn(bashPath, ['-c', command], {
                 cwd: workspacePath,
                 env: childEnv,
             });
