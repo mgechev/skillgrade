@@ -52,9 +52,72 @@ export class DeterministicGrader implements Grader {
 
 /**
  * Uses an LLM to evaluate the agent's session transcript against a rubric.
- * Requires GEMINI_API_KEY or ANTHROPIC_API_KEY in the environment.
+ * Tries Ollama first (local, no API key), then falls back to Gemini/Anthropic cloud providers.
  */
 export class LLMGrader implements Grader {
+    private warnedAboutConfig = false;
+    private warmedUp = false;
+
+    private warnOllamaConfig(): void {
+        if (this.warnedAboutConfig) {
+            return;
+        }
+
+        this.warnedAboutConfig = true;
+
+        // Only warn in CI -- optimized env vars improved benchmarks on 4-vCPU CI
+        // runners (12s -> 6.3s) but had no effect on local 12-core Snapdragon X Elite.
+        if (!process.env.CI) {
+            return;
+        }
+
+        const warnings: string[] = [];
+
+        if (!process.env.OLLAMA_FLASH_ATTENTION) {
+            warnings.push('OLLAMA_FLASH_ATTENTION not set -- flash attention disabled');
+        }
+
+        if (!process.env.OLLAMA_KV_CACHE_TYPE) {
+            warnings.push('OLLAMA_KV_CACHE_TYPE not set -- using FP16 KV cache (higher RAM usage)');
+        }
+
+        if (warnings.length > 0) {
+            console.warn(`[LLMGrader] Suboptimal Ollama configuration detected (set env vars before starting "ollama serve"):`);
+
+            for (const w of warnings) {
+                console.warn(`  - ${w}`);
+            }
+        }
+    }
+
+    private async warmUp(ollamaHost: string, model: string): Promise<void> {
+        if (this.warmedUp) {
+            return;
+        }
+
+        this.warmedUp = true;
+        const start = Date.now();
+        console.log(`[LLMGrader] Warming up ${model}...`);
+
+        try {
+            await fetch(`${ollamaHost}/api/generate`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    model,
+                    prompt: 'hi',
+                    stream: false,
+                    options: { num_predict: 1 },
+                }),
+                signal: AbortSignal.timeout(120_000),
+            });
+            const elapsed = Date.now() - start;
+            console.log(`[LLMGrader] Model warm (${elapsed}ms)`);
+        } catch (err: any) {
+            const elapsed = Date.now() - start;
+            console.warn(`[LLMGrader] Warmup failed after ${elapsed}ms: ${err?.message || err}`);
+        }
+    }
+
     async grade(
         _workspace: string,
         _provider: EnvironmentProvider,
@@ -124,22 +187,179 @@ ${transcript}
 
 Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explanation>"}`;
 
-        // Try Gemini API first, fall back to Anthropic
+        // Provider fallback chain: Ollama (local) -> Gemini (cloud) -> Anthropic (cloud)
+        const ollamaHost = env?.OLLAMA_HOST || process.env.OLLAMA_HOST || 'http://localhost:11434';
+        const model = config.model || 'qwen2.5:3b';
         const apiKey = env?.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
         const anthropicKey = env?.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
 
+        // 1. Try Ollama first (no API key needed)
+        const ollamaStatus = await this.checkOllamaAvailability(ollamaHost, model);
+
+        if (ollamaStatus.available) {
+            await this.warmUp(ollamaHost, model);
+            this.warnOllamaConfig();
+            const ollamaResult = await this.callOllamaWithRetry(prompt, ollamaHost, config);
+
+            if (ollamaResult) {
+                return ollamaResult;
+            }
+
+            // Unexpected: availability passed but call failed -- fall through to cloud
+        }
+
+        if (!ollamaStatus.available) {
+            if (!apiKey && !anthropicKey) {
+                // Fail fast: no Ollama and no cloud keys
+                return {
+                    grader_type: 'llm_rubric',
+                    score: 0,
+                    weight: config.weight,
+                    details: `No LLM grading available (${ollamaStatus.error}, no GEMINI_API_KEY or ANTHROPIC_API_KEY set)`
+                };
+            }
+
+            // Graceful degradation: warn and fall through to cloud
+            console.warn(`[LLMGrader] Ollama unavailable (${ollamaStatus.error}), falling back to cloud provider`);
+        }
+
+        // 2. Try Gemini
         if (apiKey) {
             return this.callGemini(prompt, apiKey, config);
-        } else if (anthropicKey) {
+        }
+
+        // 3. Try Anthropic
+        if (anthropicKey) {
             return this.callAnthropic(prompt, anthropicKey, config);
         }
+
+        const reason = ollamaStatus.available
+            ? 'Ollama generation failed'
+            : (ollamaStatus.error || 'Ollama not available');
 
         return {
             grader_type: 'llm_rubric',
             score: 0,
             weight: config.weight,
-            details: 'No API key available for LLM grading (set GEMINI_API_KEY or ANTHROPIC_API_KEY)'
+            details: `No LLM grading available (${reason}, no GEMINI_API_KEY or ANTHROPIC_API_KEY set)`
         };
+    }
+
+    private async checkOllamaAvailability(ollamaHost: string, model: string): Promise<{ available: boolean; error?: string }> {
+        // Health check with 5s timeout
+        try {
+            const healthResponse = await fetch(`${ollamaHost}/`, {
+                signal: AbortSignal.timeout(5000),
+            });
+
+            if (!healthResponse.ok) {
+                return { available: false, error: `Ollama health check failed (HTTP ${healthResponse.status})` };
+            }
+        } catch {
+            return { available: false, error: `Ollama is not running at ${ollamaHost}. Start it with: ollama serve` };
+        }
+
+        // Model availability check
+        try {
+            const tagsResponse = await fetch(`${ollamaHost}/api/tags`, {
+                signal: AbortSignal.timeout(5000),
+            });
+            const tagsData = await tagsResponse.json() as any;
+            const models: any[] = tagsData?.models || [];
+
+            const modelFound = models.some((m: any) => {
+                const name: string = m.name || '';
+
+                // Exact match, or prefix match when user omits tag (e.g., "qwen3" matches "qwen3:latest")
+                return name === model || (name.split(':')[0] === model.split(':')[0] && !model.includes(':'));
+            });
+
+            if (!modelFound) {
+                return { available: false, error: `Ollama is running but model "${model}" is not pulled. Run: ollama pull ${model}` };
+            }
+        } catch {
+            return { available: false, error: `Ollama is not running at ${ollamaHost}. Start it with: ollama serve` };
+        }
+
+        return { available: true };
+    }
+
+    private async callOllama(prompt: string, ollamaHost: string, config: GraderConfig): Promise<GraderResult | null> {
+        // Benchmark-validated Ollama defaults (Phase 2.1, qwen2.5:3b benchmark results)
+        // qwen2.5:3b: perfect discrimination (positive=1.0, empty=0.0, wrong=0.0),
+        // ~4.6s median wall time, 100% JSON Schema validity across all profiles.
+        const OLLAMA_NUM_CTX = 8192;
+        const OLLAMA_NUM_PREDICT = 512;
+        const OLLAMA_TIMEOUT_MS = 120_000;
+
+        const model = config.model || 'qwen2.5:3b';
+
+        try {
+            const response = await fetch(`${ollamaHost}/api/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model,
+                    prompt,
+                    stream: false,
+                    format: {
+                        type: 'object',
+                        properties: {
+                            score: { type: 'number', minimum: 0.0, maximum: 1.0 },
+                            reasoning: { type: 'string' },
+                        },
+                        required: ['score', 'reasoning'],
+                    },
+                    options: {
+                        temperature: 0,
+                        num_predict: OLLAMA_NUM_PREDICT,
+                        num_ctx: OLLAMA_NUM_CTX,
+                    },
+                }),
+                signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS),
+            });
+
+            if (!response.ok) {
+                console.warn(`[LLMGrader] Ollama returned HTTP ${response.status}`);
+                return null;
+            }
+
+            const data = await response.json() as any;
+            const text = data?.response || '';
+
+            return this.parseResponse(text, config);
+        } catch (err: any) {
+            console.warn(`[LLMGrader] Ollama call failed: ${err?.message || err}`);
+            return null;
+        }
+    }
+
+    private async callOllamaWithRetry(prompt: string, ollamaHost: string, config: GraderConfig, maxRetries: number = 3): Promise<GraderResult | null> {
+        let lastResult: GraderResult | null = null;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            const result = await this.callOllama(prompt, ollamaHost, config);
+
+            // Connection error: return null immediately, no retry
+            if (result === null) {
+                return null;
+            }
+
+            lastResult = result;
+
+            // Valid parse (including score=0): return immediately
+            if (!result.details.startsWith('Failed to parse')) {
+                return result;
+            }
+
+            // Parse failure: retry with backoff unless last attempt
+            if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+                continue;
+            }
+        }
+
+        return lastResult;
     }
 
     private async callGemini(prompt: string, apiKey: string, config: GraderConfig): Promise<GraderResult> {

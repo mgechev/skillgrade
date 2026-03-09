@@ -6,22 +6,22 @@ Evaluation framework for [Agent Skills](https://agentskills.io/home). Inspired b
 
 ## Getting Started
 
-**Prerequisites**: Node.js 20+, pnpm, Docker
+**Prerequisites**: Node.js 24+, npm, Docker
 
 ```bash
-pnpm install
+npm install
 ```
 
 Run your first eval (requires a [Gemini API key](https://aistudio.google.com/apikey)):
 
 ```bash
-GEMINI_API_KEY=your-key pnpm run eval superlint
+GEMINI_API_KEY=your-key npm run eval -- superlint
 ```
 
 Verify infrastructure without an API key:
 
 ```bash
-pnpm run test:bootstrap
+npm run test:bootstrap
 ```
 
 ## Core Concepts
@@ -35,28 +35,28 @@ pnpm run test:bootstrap
 
 ```bash
 # Basic eval (Gemini, Docker, 5 trials, skills auto-included)
-GEMINI_API_KEY=key pnpm run eval superlint
+GEMINI_API_KEY=key npm run eval -- superlint
 
 # Claude agent
-ANTHROPIC_API_KEY=key pnpm run eval superlint --agent=claude
+ANTHROPIC_API_KEY=key npm run eval -- superlint --agent=claude
 
 # Options
-pnpm run eval superlint --provider=local --trials=3
-pnpm run eval superlint --no-skills
-pnpm run eval superlint --parallel=3
+npm run eval -- superlint --provider=local --trials=3
+npm run eval -- superlint --no-skills
+npm run eval -- superlint --parallel=3
 
 # Validate graders with the reference solution
-pnpm run eval superlint --validate --provider=local
+npm run eval -- superlint --validate --provider=local
 
 # Run a suite of tasks
-pnpm run eval _ --suite=workflow
+npm run eval -- _ --suite=workflow
 
 # Analytics (Normalized Gain)
-pnpm run analyze --logDir=./results
+npm run analyze -- --logDir=./results
 
 # Preview results
-pnpm run preview                    # CLI report (default)
-pnpm run preview browser            # Web UI → http://localhost:3847
+npm run preview                    # CLI report (default)
+npm run preview -- browser         # Web UI → http://localhost:3847
 ```
 
 ## Task Structure
@@ -160,6 +160,29 @@ DEBUG=true
 ```
 
 All values are automatically **redacted** from persisted session logs.
+
+## Ollama Configuration
+
+For optimal performance with the local LLM grader, set these environment variables **before** starting `ollama serve`:
+
+| Variable | Recommended | Purpose |
+|----------|-------------|---------|
+| `OLLAMA_FLASH_ATTENTION` | `1` | Enable flash attention for faster inference |
+| `OLLAMA_KV_CACHE_TYPE` | `q8_0` | Use quantized KV cache (50% memory reduction vs FP16) |
+| `OLLAMA_NUM_PARALLEL` | `1` | Single request at a time (grading is sequential) |
+| `OLLAMA_NUM_THREAD` | CPU core count | Explicit thread count (workaround for ARM64 core detection bug) |
+
+Example (Linux/macOS):
+```bash
+OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_NUM_PARALLEL=1 OLLAMA_NUM_THREAD=$(nproc) ollama serve
+```
+
+Example (Windows PowerShell):
+```powershell
+$env:OLLAMA_FLASH_ATTENTION="1"; $env:OLLAMA_KV_CACHE_TYPE="q8_0"; $env:OLLAMA_NUM_PARALLEL="1"; $env:OLLAMA_NUM_THREAD="12"; ollama serve
+```
+
+The LLM grader will warn at runtime if these variables are not detected.
 
 ## Security
 

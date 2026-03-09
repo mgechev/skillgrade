@@ -8,18 +8,12 @@ yarn-error.log*
 
 # Build and TypeScript
 dist/
-*.js
-!jest.config.js
-!*.ts
 
 # Benchmarking Outputs & Reports
 results/
 logs/
 test_logs/
 secret_logs/
-*.json
-!package.json
-!tsconfig.json
 !task.toml
 
 # Environment and Secrets
@@ -36,3 +30,6 @@ secret_logs/
 .idea/
 *.swp
 *.swo
+
+# GSD symlink
+planning

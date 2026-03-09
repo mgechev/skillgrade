@@ -4,10 +4,19 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "tsc",
     "test:bootstrap": "ts-node tests/bootstrap.test.ts",
     "test:analytics": "ts-node tests/analytics.test.ts",
+    "test:ollama-grader": "ts-node tests/ollama-grader.test.ts",
+    "test:docker-cache": "ts-node tests/docker-cache.test.ts",
+    "test:local-provider": "ts-node tests/local-provider.test.ts",
+    "test:benchmark": "ts-node tests/benchmark-grader.ts",
     "eval": "ts-node src/cli.ts",
-    "validate": "ts-node src/cli.ts -- --validate",
+    "eval:superlint": "npm run eval -- superlint_demo --agent=claude --provider=local",
+    "eval:superlint:docker": "npm run eval -- superlint_demo --agent=claude --provider=docker",
+    "validate": "ts-node src/cli.ts --validate",
+    "validate:superlint": "npm run validate -- superlint_demo --provider=local",
+    "validate:superlint:docker": "npm run validate -- superlint_demo --provider=docker",
     "analyze": "ts-node src/analytics/analyze.ts",
     "preview": "ts-node src/preview.ts",
     "viewer": "ts-node src/preview.ts browser"
@@ -15,11 +24,14 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "type": "commonjs",
   "devDependencies": {
     "@types/dockerode": "^4.0.1",
     "@types/fs-extra": "^11.0.4",
-    "@types/node": "^25.3.1",
+    "@types/node": "^24.12.0",
     "@types/tar-stream": "^3.1.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"

@@ -1,8 +1,71 @@
 import Docker from 'dockerode';
+import { createHash } from 'node:crypto';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as tar from 'tar-stream';
 import { EnvironmentProvider, CommandResult, TaskConfig } from '../types';
+
+/**
+ * Recursively walk a directory and return all file paths.
+ */
+async function walkDir(dir: string): Promise<string[]> {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const files: string[] = [];
+
+    for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+
+        if (entry.isDirectory()) {
+            files.push(...await walkDir(fullPath));
+        } else {
+            files.push(fullPath);
+        }
+    }
+
+    return files;
+}
+
+/**
+ * Compute a content-based hash of all files in taskPath and skillsPaths.
+ * Returns the first 8 hex characters of a SHA-256 digest.
+ * File paths are sorted alphabetically for deterministic ordering.
+ */
+export async function computeContextHash(taskPath: string, skillsPaths: string[]): Promise<string> {
+    const hasher = createHash('sha256');
+
+    // Collect all files with their root directory for relative path computation
+    const fileEntries: Array<{ relativePath: string; fullPath: string }> = [];
+
+    // Files from taskPath
+    const taskFiles = await walkDir(taskPath);
+
+    for (const fullPath of taskFiles) {
+        const relativePath = 'task/' + path.relative(taskPath, fullPath).replace(/\\/g, '/');
+        fileEntries.push({ relativePath, fullPath });
+    }
+
+    // Files from each skills path
+    for (const skillsPath of skillsPaths) {
+        const skillFiles = await walkDir(skillsPath);
+
+        for (const fullPath of skillFiles) {
+            const relativePath = 'skill/' + path.basename(skillsPath) + '/' + path.relative(skillsPath, fullPath).replace(/\\/g, '/');
+            fileEntries.push({ relativePath, fullPath });
+        }
+    }
+
+    // Sort alphabetically by relative path for deterministic ordering
+    fileEntries.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+
+    // Feed each file's relative path and content into the hasher
+    for (const entry of fileEntries) {
+        const content = await fs.readFile(entry.fullPath);
+        hasher.update(entry.relativePath + '\0');
+        hasher.update(content);
+    }
+
+    return hasher.digest('hex').substring(0, 8);
+}
 
 export class DockerProvider implements EnvironmentProvider {
     private docker: Docker;
@@ -22,7 +85,21 @@ export class DockerProvider implements EnvironmentProvider {
         this.taskConfig = taskConfig;
         this.envPairs = env ? Object.entries(env).map(([k, v]) => `${k}=${v}`) : [];
 
-        const baseName = `skill-eval-${path.basename(taskPath)}-${Date.now()}`;
+        const hash = await computeContextHash(taskPath, skillsPaths);
+        const baseName = `skill-eval-${path.basename(taskPath)}-${hash}`;
+
+        // Check if the final image already exists in the local Docker cache
+        const finalName = skillsPaths.length > 0 ? `${baseName}-ready` : baseName;
+
+        try {
+            await this.docker.getImage(finalName).inspect();
+            this.preparedImage = finalName;
+            console.log(`  Image ready: ${this.preparedImage} (cached)`);
+
+            return this.preparedImage;
+        } catch {
+            // Image does not exist, proceed with build
+        }
 
         // Build image from Dockerfile
         const stream = await this.docker.buildImage({
@@ -129,22 +206,19 @@ export class DockerProvider implements EnvironmentProvider {
     }
 
     /**
-     * One-time teardown: remove the prepared image after all trials.
+     * One-time teardown: clear the prepared image reference.
+     * The Docker image is preserved for cache reuse across runs.
+     * Image names are deterministic (content-hash), so stale images
+     * are naturally replaced when content changes. Users can run
+     * `docker image prune` to clean up unused images.
      */
     async teardown(): Promise<void> {
-        if (this.preparedImage) {
-            try {
-                await this.docker.getImage(this.preparedImage).remove({ force: true });
-            } catch (e) {
-                // Already removed
-            }
-            this.preparedImage = undefined;
-        }
+        this.preparedImage = undefined;
     }
 
     private async createTarFromDir(dirPath: string, prefix: string): Promise<Buffer> {
         const pack = tar.pack();
-        const files = await this.walkDir(dirPath);
+        const files = await walkDir(dirPath);
 
         for (const filePath of files) {
             const relativePath = path.relative(dirPath, filePath);
@@ -160,20 +234,6 @@ export class DockerProvider implements EnvironmentProvider {
             pack.on('end', () => resolve(Buffer.concat(chunks)));
             pack.on('error', reject);
         });
-    }
-
-    private async walkDir(dir: string): Promise<string[]> {
-        const entries = await fs.readdir(dir, { withFileTypes: true });
-        const files: string[] = [];
-        for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name);
-            if (entry.isDirectory()) {
-                files.push(...await this.walkDir(fullPath));
-            } else {
-                files.push(fullPath);
-            }
-        }
-        return files;
     }
 
     async runCommand(containerId: string, command: string, env?: Record<string, string>): Promise<CommandResult> {
