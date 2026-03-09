@@ -116,11 +116,11 @@ None yet.
 
 ### Quick Tasks Completed
 
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 1 | Split CI workflow into test-integration and test-unit | 2026-03-09 | 47f43a3 | [1-split-ci-workflow-into-test-integration-](./quick/1-split-ci-workflow-into-test-integration-/) |
-| 2 | Remove redundant typecheck job from CI | 2026-03-09 | 13dfee0 | [2-remove-redundant-typecheck-job](./quick/2-remove-redundant-typecheck-job/) |
-| 3 | Content-hash Docker image naming | 2026-03-09 | 2903a5f | [3-resolve-todo-1-content-hash-docker-image](./quick/3-resolve-todo-1-content-hash-docker-image/) |
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 1 | Split CI workflow into test-integration and test-unit | 2026-03-09 | 47f43a3 | | [1-split-ci-workflow-into-test-integration-](./quick/1-split-ci-workflow-into-test-integration-/) |
+| 2 | Remove redundant typecheck job from CI | 2026-03-09 | 13dfee0 | | [2-remove-redundant-typecheck-job](./quick/2-remove-redundant-typecheck-job/) |
+| 3 | Content-hash Docker image naming | 2026-03-09 | 2903a5f | Verified | [3-resolve-todo-1-content-hash-docker-image](./quick/3-resolve-todo-1-content-hash-docker-image/) |
 
 ## Session Continuity
 
