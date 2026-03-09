@@ -126,7 +126,7 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
 
         // Provider fallback chain: Ollama (local) -> Gemini (cloud) -> Anthropic (cloud)
         const ollamaHost = env?.OLLAMA_HOST || process.env.OLLAMA_HOST || 'http://localhost:11434';
-        const model = config.model || 'phi3.5:3.8b';
+        const model = config.model || 'qwen2.5:3b';
         const apiKey = env?.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
         const anthropicKey = env?.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
 
@@ -220,11 +220,14 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
     }
 
     private async callOllama(prompt: string, ollamaHost: string, config: GraderConfig): Promise<GraderResult | null> {
-        // Default: phi3.5:3.8b — non-thinking model, completes grading in ~14s
-        // on CPU. Avoid thinking models (e.g. qwen3:4b) as default — they spend
-        // their num_predict budget on <think> tokens before the JSON answer,
-        // producing empty responses or timeouts on CPU-only hardware.
-        const model = config.model || 'phi3.5:3.8b';
+        // Benchmark-validated Ollama defaults (Phase 2.1, qwen2.5:3b benchmark results)
+        // qwen2.5:3b: perfect discrimination (positive=1.0, empty=0.0, wrong=0.0),
+        // ~4.6s median wall time, 100% JSON Schema validity across all profiles.
+        const OLLAMA_NUM_CTX = 8192;
+        const OLLAMA_NUM_PREDICT = 512;
+        const OLLAMA_TIMEOUT_MS = 60000;
+
+        const model = config.model || 'qwen2.5:3b';
 
         try {
             const response = await fetch(`${ollamaHost}/api/generate`, {
@@ -234,13 +237,21 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
                     model,
                     prompt,
                     stream: false,
+                    format: {
+                        type: 'object',
+                        properties: {
+                            score: { type: 'number', minimum: 0.0, maximum: 1.0 },
+                            reasoning: { type: 'string' },
+                        },
+                        required: ['score', 'reasoning'],
+                    },
                     options: {
                         temperature: 0,
-                        num_predict: 2048,
-                        num_ctx: config.num_ctx ?? 4096,
+                        num_predict: OLLAMA_NUM_PREDICT,
+                        num_ctx: OLLAMA_NUM_CTX,
                     },
                 }),
-                signal: AbortSignal.timeout(config.timeout_ms ?? 60000),
+                signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS),
             });
 
             if (!response.ok) {
