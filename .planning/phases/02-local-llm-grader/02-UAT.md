@@ -1,9 +1,9 @@
 ---
-status: complete
+status: diagnosed
 phase: 02-local-llm-grader
 source: 02-01-SUMMARY.md, 02-02-SUMMARY.md, 02-03-SUMMARY.md, 02-04-SUMMARY.md, 02-05-SUMMARY.md, 02-06-SUMMARY.md, 02-07-SUMMARY.md
 started: 2026-03-08T22:30:00Z
-updated: 2026-03-09T00:12:00Z
+updated: 2026-03-09T00:30:00Z
 ---
 
 ## Current Test
@@ -52,16 +52,18 @@ skipped: 0
   reason: "User reported: 2/3 tests fail from PowerShell. PATH first entry is /usr/local/sbin (not bin/), custom env var empty. Tool-by-name test passes. All 3 pass from Git Bash but not PowerShell."
   severity: major
   test: 4
-  root_cause: "MSYS2 bash startup scripts (sourced when parent is PowerShell, not Git Bash) prepend default paths (/usr/local/sbin etc.) and may clear custom env vars. Plan 06 fixes (colon separator, BASH_ENV=undefined) are insufficient: (1) BASH_ENV:undefined in env object becomes string 'undefined' on some Node.js versions, or is stripped but /etc/profile still runs. (2) Need bash --norc --noprofile -c to suppress ALL startup scripts. (3) Must delete all case-variants of Path/PATH from spread env to avoid duplicate keys on Windows."
+  root_cause: "Two issues: (1) MSYS2 bash always runs as login shell on Windows (shopt login_shell=yes), sourcing /etc/profile which reconstructs PATH with MSYS2 defaults + user profile scripts (FNM etc.) prepended. This pushes workspace bin/ down the PATH list. (2) User's custom bash profile scripts (for FNM node version management) may export env vars and reorder PATH. spawn with shell:'bash' has no way to suppress /etc/profile since MSYS2 forces login shell behavior. User guidance: Test 1 assertion is too strict — should check bin/ is in PATH and precedes system dirs, not that it's first entry."
   artifacts:
     - path: "src/providers/local.ts"
-      issue: "spawn uses shell:'bash' which invokes bash -c (allows profile sourcing); env spread may create both Path and PATH keys"
+      issue: "spawn with shell:'bash' allows MSYS2 login shell initialization; env spread may create both Path and PATH keys on Windows"
     - path: "tests/local-provider.test.ts"
-      issue: "Tests pass from Git Bash but fail from PowerShell — environment-dependent"
+      issue: "Test 1 asserts first PATH entry is bin/ — too strict for MSYS2 where profiles prepend entries. Test 3 env var propagation fails from PowerShell."
   missing:
-    - "Use spawn('bash', ['--norc', '--noprofile', '-c', command]) instead of spawn(command, {shell:'bash'})"
-    - "Delete all case-variants of Path/PATH from process.env spread before setting PATH"
-    - "Use delete instead of undefined for BASH_ENV/ENV removal"
+    - "Test 1: Change assertion to verify bin/ is in PATH and precedes /usr/bin (system dirs), not necessarily first"
+    - "Test 3 / local.ts: Use spawn('bash', ['--norc', '--noprofile', '-c', command]) to suppress profile sourcing that may clear env vars"
+    - "local.ts: Delete all case-variants of Path/PATH from process.env spread before setting PATH"
+    - "local.ts: Use delete instead of undefined for BASH_ENV/ENV removal"
+    - "Secret injection test: Fix sanitization assertion to not require [REDACTED] when env var never reached subprocess"
   debug_session: ""
 
 - truth: "Running an evaluation with Ollama produces 0.0-1.0 LLM scores using local model with no cloud API keys"
@@ -90,7 +92,15 @@ skipped: 0
   reason: "User reported: Secret Injection & Sanitization test fails with reward=0.00. Agent ran only 1 command in 10s ('Checking for secret...'), did not follow superlint workflow. Both graders scored 0.00. Core LLM grading works (llm_rubric=1.00 in all other tests)."
   severity: minor
   test: 5
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Two issues: (1) reward=0.00 is EXPECTED — the secretAgent intentionally only runs echo, not the superlint workflow, so both graders correctly score 0. (2) The REAL failure is in the sanitization assertion: $MY_SECRET expands to empty string in bash subprocess (same env var propagation bug as Test 4), so sanitize() finds nothing to replace, [REDACTED] never appears in log, and the test hits the else branch ('not found and not redacted'). Fix depends on fixing env var propagation in local.ts (shared root cause with Test 4)."
+  artifacts:
+    - path: "tests/bootstrap.test.ts"
+      issue: "Lines 138-146: sanitization assertion assumes secret appears in stdout then gets redacted; no fallback for env var never reaching subprocess"
+    - path: "src/providers/local.ts"
+      issue: "Same spawn env var propagation issue as Test 4 — env vars lost in MSYS2 profile sourcing from PowerShell"
+    - path: "secret_logs/superlint_demo_2026-03-09T00-09-34-928Z.json"
+      issue: "stdout shows 'The secret is \\n' — empty expansion confirms env var did not reach bash"
+  missing:
+    - "Fix env var propagation in local.ts (shared fix with Test 4)"
+    - "Update sanitization test to verify secret is NOT in logs (positive assertion) rather than requiring [REDACTED] to appear"
+  debug_session: ".planning/debug/secret-injection-reward-zero.md"
