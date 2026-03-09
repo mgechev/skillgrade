@@ -39,16 +39,28 @@ export class LocalProvider implements EnvironmentProvider {
             const binDir = path.join(workspacePath, 'bin');
             const currentPath = env?.PATH ?? process.env.PATH ?? '';
 
-            const child = spawn(command, {
-                shell: 'bash',
+            // Build a clean env object: remove all case-variants of PATH so only our canonical PATH survives
+            const baseEnv = { ...process.env };
+
+            for (const key of Object.keys(baseEnv)) {
+                if (key.toLowerCase() === 'path') {
+                    delete baseEnv[key];
+                }
+            }
+
+            // Remove BASH_ENV and ENV so bash does not source extra startup files
+            delete baseEnv['BASH_ENV'];
+            delete baseEnv['ENV'];
+
+            const childEnv = {
+                ...baseEnv,
+                ...env,
+                PATH: `${binDir}:${currentPath}`,
+            };
+
+            const child = spawn('bash', ['--norc', '--noprofile', '-c', command], {
                 cwd: workspacePath,
-                env: {
-                    ...process.env,
-                    ...env,
-                    PATH: `${binDir}:${currentPath}`,
-                    BASH_ENV: undefined,
-                    ENV: undefined,
-                },
+                env: childEnv,
             });
 
             let stdout = '';
