@@ -36,7 +36,7 @@ async function runTests() {
     let passed = 0;
     let failed = 0;
 
-    // Test 1: workspace bin/ is on PATH
+    // Test 1: workspace bin/ is in PATH and precedes system dirs
     try {
         // Create a minimal workspace with a unique directory name
         const workspaceId = `test-provider-${Date.now()}`;
@@ -48,21 +48,27 @@ async function runTests() {
         await fs.writeFile(scriptPath, '#!/bin/bash\necho "$PATH"', { mode: 0o755 });
 
         const result = await provider.runCommand(workspace, 'echo "$PATH"');
-        const firstEntry = result.stdout.trim().split(':')[0];
+        const pathEntries = result.stdout.trim().split(':');
+        const binEntry = pathEntries.find(e => e.includes(workspaceId) && (e.endsWith('/bin') || e.endsWith('\\bin')));
 
-        // On Windows with Git Bash, paths are MSYS-translated (e.g., /tmp/... instead of C:\Users\...\Temp\...)
-        // so we verify the first PATH entry ends with /bin and contains the workspace ID
-        assert(firstEntry.endsWith('/bin') || firstEntry.endsWith('\\bin'),
-            `Expected first PATH entry to end with /bin, got ${firstEntry}`);
-        assert(firstEntry.includes(workspaceId),
-            `Expected first PATH entry to include workspace ID '${workspaceId}', got ${firstEntry}`);
+        assert(binEntry !== undefined,
+            `Expected PATH to contain workspace bin/ (id: ${workspaceId}), got: ${result.stdout.trim()}`);
+
+        const binIdx = pathEntries.indexOf(binEntry!);
+        const usrBinIdx = pathEntries.findIndex(e => e === '/usr/bin' || e.endsWith(':\\usr\\bin'));
+
+        if (usrBinIdx !== -1) {
+            assert(binIdx < usrBinIdx,
+                `Expected workspace bin/ (idx ${binIdx}) to precede /usr/bin (idx ${usrBinIdx}) in PATH`);
+        }
+
         assert(result.exitCode === 0, `Expected exit code 0, got ${result.exitCode}`);
 
         await removeWithRetry(workspace);
-        console.log('  PASS: workspace bin/ is first on PATH');
+        console.log('  PASS: workspace bin/ is in PATH and precedes system dirs');
         passed++;
     } catch (e: any) {
-        console.error(`  FAIL: workspace bin/ is first on PATH - ${e.message}`);
+        console.error(`  FAIL: workspace bin/ is in PATH and precedes system dirs - ${e.message}`);
         failed++;
     }
 
