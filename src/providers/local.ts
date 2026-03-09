@@ -1,8 +1,70 @@
 import * as fs from 'fs-extra';
 import * as os from 'os';
 import * as path from 'path';
-import { spawn } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { EnvironmentProvider, CommandResult, TaskConfig } from '../types';
+
+/**
+ * Resolve the path to Git Bash on Windows.
+ *
+ * On Windows, multiple bash.exe binaries may exist on PATH:
+ *   - C:\Program Files\Git\usr\bin\bash.exe  (Git Bash / MSYS2)
+ *   - C:\WINDOWS\system32\bash.exe           (WSL launcher)
+ *   - C:\Users\...\AppData\Local\Microsoft\WindowsApps\bash.exe  (WSL app alias)
+ *
+ * When spawned from PowerShell, system32\bash.exe (WSL) is typically found
+ * first because Git\usr\bin is not on the Windows PATH (MSYS2 only prepends
+ * it inside Git Bash sessions). WSL bash reconstructs PATH from Linux
+ * defaults and does not inherit Windows env vars, breaking PATH augmentation
+ * and custom env var propagation.
+ *
+ * This function locates Git Bash explicitly via `git --exec-path`, falling
+ * back to common install locations, so the correct bash is always used.
+ */
+let _cachedBashPath: string | null = null;
+
+function resolveGitBash(): string {
+    if (_cachedBashPath !== null) {
+        return _cachedBashPath;
+    }
+
+    // Derive Git root from git --exec-path (e.g. C:/Program Files/Git/mingw64/libexec/git-core)
+    try {
+        const execPath = execSync('git --exec-path', {
+            encoding: 'utf-8',
+            timeout: 5000,
+        }).trim();
+        const gitRoot = path.resolve(execPath, '..', '..', '..');
+        const bashPath = path.join(gitRoot, 'usr', 'bin', 'bash.exe');
+
+        if (fs.existsSync(bashPath)) {
+            _cachedBashPath = bashPath;
+
+            return _cachedBashPath;
+        }
+    } catch {
+        // git not available or timed out; fall through
+    }
+
+    // Fallback: common Git for Windows install locations
+    const candidates = [
+        'C:\\Program Files\\Git\\usr\\bin\\bash.exe',
+        'C:\\Program Files (x86)\\Git\\usr\\bin\\bash.exe',
+    ];
+
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+            _cachedBashPath = candidate;
+
+            return _cachedBashPath;
+        }
+    }
+
+    // Last resort: bare 'bash' and hope it resolves correctly
+    _cachedBashPath = 'bash';
+
+    return _cachedBashPath;
+}
 
 export class LocalProvider implements EnvironmentProvider {
     async setup(taskPath: string, skillsPaths: string[], _taskConfig: TaskConfig, env?: Record<string, string>): Promise<string> {
@@ -39,6 +101,11 @@ export class LocalProvider implements EnvironmentProvider {
             const binDir = path.join(workspacePath, 'bin');
             const currentPath = env?.PATH ?? process.env.PATH ?? '';
 
+            // On Windows, PATH entries are separated by semicolons.
+            // MSYS2 bash converts them to POSIX format automatically.
+            // Using colons on Windows breaks drive-letter paths (e.g. "C:\..." splits into "C" + "\...").
+            const sep = process.platform === 'win32' ? ';' : ':';
+
             // Build a clean env object: remove all case-variants of PATH so only our canonical PATH survives
             const baseEnv = { ...process.env };
 
@@ -55,10 +122,11 @@ export class LocalProvider implements EnvironmentProvider {
             const childEnv = {
                 ...baseEnv,
                 ...env,
-                PATH: `${binDir}:${currentPath}`,
+                PATH: `${binDir}${sep}${currentPath}`,
             };
 
-            const child = spawn('bash', ['--norc', '--noprofile', '-c', command], {
+            const bashPath = process.platform === 'win32' ? resolveGitBash() : 'bash';
+            const child = spawn(bashPath, ['--norc', '--noprofile', '-c', command], {
                 cwd: workspacePath,
                 env: childEnv,
             });
