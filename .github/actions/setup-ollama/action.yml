@@ -1,0 +1,44 @@
+name: 'Setup Ollama'
+description: 'Install Ollama, cache models, start server with optimized config, pull model'
+inputs:
+  model:
+    description: 'Ollama model to pull and use'
+    required: false
+    default: 'qwen2.5:3b'
+  ollama-version:
+    description: 'Ollama CLI version'
+    required: false
+    default: '0.17.7'
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Ollama
+      uses: ai-action/setup-ollama@v2
+      with:
+        version: ${{ inputs.ollama-version }}
+
+    - name: Cache Ollama models
+      uses: actions/cache@v5
+      with:
+        path: ~/.ollama
+        key: ollama-model-${{ inputs.model }}
+        restore-keys: |
+          ollama-model-
+
+    - name: Start Ollama
+      shell: bash
+      run: |
+        OLLAMA_FLASH_ATTENTION=1 \
+        OLLAMA_KV_CACHE_TYPE=q8_0 \
+        OLLAMA_NUM_PARALLEL=1 \
+        OLLAMA_NUM_THREAD=4 \
+        ollama serve &
+        for i in $(seq 1 30); do
+          curl -sf http://localhost:11434/ > /dev/null 2>&1 && break
+          sleep 1
+        done
+        echo "[OK] Ollama ready"
+
+    - name: Pull model
+      shell: bash
+      run: ollama pull ${{ inputs.model }}
