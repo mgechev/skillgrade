@@ -102,8 +102,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-2 pending:
-- Add @types/node to test file resolution path (testing)
+1 pending:
 - Apply and verify Docker image speed optimizations (providers)
 
 ### Roadmap Evolution
