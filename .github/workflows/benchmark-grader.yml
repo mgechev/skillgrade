@@ -11,7 +11,6 @@ on:
         description: 'Tuning profile: default, optimized-env, optimized-all, or all'
         required: false
         default: 'all'
-  pull_request: # Temporary during Phase 2.1 development -- REMOVE before phase completes
 
 permissions:
   contents: read
