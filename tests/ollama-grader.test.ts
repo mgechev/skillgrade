@@ -64,7 +64,7 @@ function ollamaHealthOk(): MockRoute {
     };
 }
 
-function ollamaTagsWithModel(modelName: string = 'phi3.5:3.8b'): MockRoute {
+function ollamaTagsWithModel(modelName: string = 'qwen2.5:3b'): MockRoute {
     return {
         method: 'GET',
         pathPattern: '/api/tags',
@@ -184,7 +184,7 @@ async function main() {
         assert(result === null, 'result should be null on connection error');
     });
 
-    await test('callOllama sends correct request body (model, prompt, stream:false, temperature:0, num_predict:2048, no format)', async () => {
+    await test('callOllama sends correct request body (model, prompt, stream:false, temperature:0, num_predict:512, JSON Schema format)', async () => {
         let capturedBody: any = null;
 
         globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -206,12 +206,16 @@ async function main() {
         await (grader as any).callOllama('my test prompt', 'http://localhost:11434', config);
 
         assert(capturedBody !== null, 'request body should have been captured');
-        assert(capturedBody.model === 'phi3.5:3.8b', `model should be phi3.5:3.8b, got: ${capturedBody.model}`);
+        assert(capturedBody.model === 'qwen2.5:3b', `model should be qwen2.5:3b, got: ${capturedBody.model}`);
         assert(capturedBody.prompt === 'my test prompt', 'prompt should match');
         assert(capturedBody.stream === false, 'stream should be false');
-        assert(capturedBody.format === undefined, 'format should not be set (incompatible with thinking models)');
+        assert(capturedBody.format !== undefined && capturedBody.format.type === 'object',
+            `format should be JSON Schema object, got: ${JSON.stringify(capturedBody.format)}`);
+        assert(capturedBody.format.properties.score !== undefined, 'format should have score property');
+        assert(capturedBody.format.properties.reasoning !== undefined, 'format should have reasoning property');
         assert(capturedBody.options.temperature === 0, `temperature should be 0, got: ${capturedBody.options.temperature}`);
-        assert(capturedBody.options.num_predict === 2048, `num_predict should be 2048, got: ${capturedBody.options.num_predict}`);
+        assert(capturedBody.options.num_predict === 512, `num_predict should be 512, got: ${capturedBody.options.num_predict}`);
+        assert(capturedBody.options.num_ctx === 8192, `num_ctx should be 8192, got: ${capturedBody.options.num_ctx}`);
     });
 
     // --- callOllamaWithRetry tests ---
@@ -348,7 +352,7 @@ async function main() {
 
             if (url === 'http://localhost:11434/api/tags') {
                 return new Response(JSON.stringify({
-                    models: [{ name: 'phi3.5:3.8b' }],
+                    models: [{ name: 'qwen2.5:3b' }],
                 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
             }
 
@@ -487,7 +491,7 @@ async function main() {
         }
     });
 
-    await test('default model is phi3.5:3.8b when config.model is undefined', async () => {
+    await test('default model is qwen2.5:3b when config.model is undefined', async () => {
         let capturedModel: string = '';
 
         globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -508,7 +512,7 @@ async function main() {
 
         const config = makeConfig({ model: undefined });
         await (grader as any).callOllama('prompt', 'http://localhost:11434', config);
-        assert(capturedModel === 'phi3.5:3.8b', `default model should be phi3.5:3.8b, got: ${capturedModel}`);
+        assert(capturedModel === 'qwen2.5:3b', `default model should be qwen2.5:3b, got: ${capturedModel}`);
     });
 
     await test('config.model overrides default (e.g., config.model = "llama3.2:latest")', async () => {
@@ -548,7 +552,7 @@ async function main() {
 
             if (url === 'http://custom-host:11434/api/tags') {
                 return new Response(JSON.stringify({
-                    models: [{ name: 'phi3.5:3.8b' }],
+                    models: [{ name: 'qwen2.5:3b' }],
                 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
             }
 
