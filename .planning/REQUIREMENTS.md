@@ -73,29 +73,29 @@ Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AGENT-01 | — | Pending |
-| AGENT-02 | — | Pending |
-| AGENT-03 | — | Pending |
-| AGENT-04 | — | Pending |
-| OLCFG-01 | — | Pending |
-| OLCFG-02 | — | Pending |
-| OLCFG-03 | — | Pending |
-| PIPE-01 | — | Pending |
-| PIPE-02 | — | Pending |
-| PIPE-03 | — | Pending |
-| PIPE-04 | — | Pending |
-| CI-01 | — | Pending |
-| CI-02 | — | Pending |
-| CI-03 | — | Pending |
-| CI-04 | — | Pending |
-| PERF-01 | — | Pending |
-| PERF-02 | — | Pending |
+| AGENT-01 | Phase 4 | Pending |
+| AGENT-02 | Phase 5 | Pending |
+| AGENT-03 | Phase 7 | Pending |
+| AGENT-04 | Phase 7 | Pending |
+| OLCFG-01 | Phase 4 | Pending |
+| OLCFG-02 | Phase 4 | Pending |
+| OLCFG-03 | Phase 4 | Pending |
+| PIPE-01 | Phase 4 | Pending |
+| PIPE-02 | Phase 5 | Pending |
+| PIPE-03 | Phase 4 | Pending |
+| PIPE-04 | Phase 5 | Pending |
+| CI-01 | Phase 6 | Pending |
+| CI-02 | Phase 6 | Pending |
+| CI-03 | Phase 6 | Pending |
+| CI-04 | Phase 6 | Pending |
+| PERF-01 | Phase 7 | Pending |
+| PERF-02 | Phase 7 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 17 total
-- Mapped to phases: 0
-- Unmapped: 17 (pending roadmap)
+- Mapped to phases: 17
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-10*
-*Last updated: 2026-03-10 after initial definition*
+*Last updated: 2026-03-10 after roadmap mapping*
