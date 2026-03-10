@@ -40,12 +40,13 @@ export async function smokeTestToolCalling(
         const response = await client.chat({
             model,
             messages: [
+                { role: 'system', content: 'You are a helpful assistant. /no_think' },
                 { role: 'user', content: 'List the files in the current directory.' },
             ],
             tools: [SMOKE_TEST_TOOL],
             stream: false,
             think: false,
-            options: { num_ctx: 4096, num_predict: 256 },
+            options: { num_ctx: 2048, num_predict: 512 },
         });
 
         const toolCalls = response.message.tool_calls;

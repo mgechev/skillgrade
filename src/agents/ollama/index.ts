@@ -30,9 +30,9 @@ function loadTaskPermissions(workspacePath: string): {
 }
 
 const SYSTEM_PROMPT =
-    'You are an AI agent that completes coding tasks. You have access to tools for ' +
-    'reading files, writing files, listing directories, and running bash commands. ' +
-    'Use these tools to complete the task. When you are done, respond with a summary of what you did.';
+    'You are an AI agent that completes coding tasks. Use the provided tools to complete the task. ' +
+    'Do not explain your reasoning - just call the appropriate tool. ' +
+    'When you are done, respond with a summary of what you did. /no_think';
 
 /**
  * OllamaToolAgent -- an agent that uses the Ollama chat API with structured tool calling.
