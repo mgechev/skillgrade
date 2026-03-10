@@ -189,6 +189,25 @@ async function main() {
 
             // Smoke test gate for Ollama agent
             if (agentType === 'ollama') {
+                // Unload non-agent models to free RAM/CPU for the agent
+                try {
+                    const { Ollama } = require('ollama');
+                    const client = new Ollama({ host: 'http://localhost:11434' });
+                    const running = await client.ps();
+                    const agentModel = 'qwen3-skill-eval-agent';
+                    const others = running.models.filter((m: any) => !m.name.startsWith(agentModel));
+
+                    for (const model of others) {
+                        await client.chat({ model: model.name, messages: [], keep_alive: 0 });
+                    }
+
+                    if (others.length > 0) {
+                        console.log(`[INFO] Unloaded ${others.length} non-agent model(s) to free resources`);
+                    }
+                } catch {
+                    // Ignore -- Ollama may not be running yet
+                }
+
                 const smokeResult = await smokeTestToolCalling('http://localhost:11434', 'qwen3-skill-eval-agent');
 
                 if (!smokeResult.passed) {

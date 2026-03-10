@@ -22,10 +22,10 @@ function main() {
 
     // Modelfile content assertions
     assert(content.includes('FROM qwen3:4b'), 'Modelfile contains FROM qwen3:4b');
-    assert(content.includes('num_ctx 8192'), 'Modelfile contains num_ctx 8192 (OLCFG-01)');
+    assert(content.includes('num_ctx 4096'), 'Modelfile contains num_ctx 4096 (OLCFG-01)');
     assert(content.includes('num_predict 4096'), 'Modelfile contains num_predict 4096 (OLCFG-02)');
     assert(content.includes('temperature 0'), 'Modelfile contains temperature 0 (deterministic)');
-    assert(content.includes('num_thread 5'), 'Modelfile contains num_thread 5 (CPU cap)');
+    assert(content.includes('num_thread 8'), 'Modelfile contains num_thread 8 (CPU cap)');
 
     // Types module compile check -- import and verify exports are defined
     const types = require('../src/agents/ollama/types');
