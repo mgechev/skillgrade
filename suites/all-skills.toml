@@ -1,0 +1,11 @@
+# All Skills Suite
+# Runs all skill evaluation tasks for coexistence testing
+
+name = "all-skills"
+description = "Runs all 12 skill evaluation tasks - use for coexistence testing with all skills enabled"
+tasks = [
+  "security_sqli", "security_xss", "security_path_traversal",
+  "perf_algorithm", "perf_nplus1", "perf_rerender",
+  "style_naming", "style_structure", "style_formatting",
+  "bug_offbyone", "bug_nullref", "bug_race",
+]

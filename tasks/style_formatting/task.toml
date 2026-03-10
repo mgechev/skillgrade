@@ -1,0 +1,27 @@
+version = "1.0"
+
+[metadata]
+author_name = "skill-eval"
+author_email = "eval@skill-eval.dev"
+difficulty = "easy"
+category = "style"
+tags = ["style", "formatting"]
+
+[agent]
+timeout_sec = 300.0
+
+[environment]
+build_timeout_sec = 180.0
+cpus = 2
+memory_mb = 2048
+storage_mb = 500
+
+[[graders]]
+type = "deterministic"
+command = "bash tests/test.sh"
+weight = 0.8
+
+[[graders]]
+type = "llm_rubric"
+rubric = "prompts/quality.md"
+weight = 0.2

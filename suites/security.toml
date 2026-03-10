@@ -1,0 +1,6 @@
+# Security Suite
+# Tests agents on detecting and fixing security vulnerabilities
+
+name = "security"
+description = "Evaluates agent ability to detect and fix security vulnerabilities (SQLi, XSS, path traversal)"
+tasks = ["security_sqli", "security_xss", "security_path_traversal"]

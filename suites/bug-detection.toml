@@ -1,0 +1,6 @@
+# Bug Detection Suite
+# Tests agents on finding and fixing common programming bugs
+
+name = "bug-detection"
+description = "Evaluates agent ability to find and fix off-by-one errors, null reference bugs, and race conditions"
+tasks = ["bug_offbyone", "bug_nullref", "bug_race"]

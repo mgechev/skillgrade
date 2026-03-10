@@ -1,0 +1,6 @@
+# Performance Suite
+# Tests agents on identifying and fixing performance issues
+
+name = "performance"
+description = "Evaluates agent ability to optimize algorithm complexity, fix N+1 queries, and prevent unnecessary re-renders"
+tasks = ["perf_algorithm", "perf_nplus1", "perf_rerender"]

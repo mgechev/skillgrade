@@ -1,0 +1,6 @@
+# Style Suite
+# Tests agents on enforcing code style and conventions
+
+name = "style"
+description = "Evaluates agent ability to fix naming conventions, improve code structure, and apply formatting rules"
+tasks = ["style_naming", "style_structure", "style_formatting"]
