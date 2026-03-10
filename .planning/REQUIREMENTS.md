@@ -9,15 +9,15 @@ Requirements for v2.0 milestone. Each maps to roadmap phases.
 
 ### Agent Backends
 
-- [ ] **AGENT-01**: OllamaToolAgent executes tasks via direct Ollama API with tool calling (read_file, write_file, bash, list_directory)
+- [x] **AGENT-01**: OllamaToolAgent executes tasks via direct Ollama API with tool calling (read_file, write_file, bash, list_directory)
 - [ ] **AGENT-02**: OpenCodeAgent executes tasks via opencode CLI backed by Ollama
 - [ ] **AGENT-03**: Both agents can run the superlint_demo task end-to-end and produce a scored result
 - [ ] **AGENT-04**: Each trial completes within 15 minutes on target hardware (local and CI)
 
 ### Ollama Configuration
 
-- [ ] **OLCFG-01**: Ollama model identified and configured that supports tool calling for agent tasks
-- [ ] **OLCFG-02**: Custom Modelfile overrides Ollama's 4K default context to a working size for agentic workflows
+- [x] **OLCFG-01**: Ollama model identified and configured that supports tool calling for agent tasks
+- [x] **OLCFG-02**: Custom Modelfile overrides Ollama's 4K default context to a working size for agentic workflows
 - [ ] **OLCFG-03**: Sequential model loading prevents OOM -- agent model unloaded before grader loads
 
 ### Eval Pipeline
@@ -73,12 +73,12 @@ Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AGENT-01 | Phase 4 | Pending |
+| AGENT-01 | Phase 4 | Complete |
 | AGENT-02 | Phase 5 | Pending |
 | AGENT-03 | Phase 7 | Pending |
 | AGENT-04 | Phase 7 | Pending |
-| OLCFG-01 | Phase 4 | Pending |
-| OLCFG-02 | Phase 4 | Pending |
+| OLCFG-01 | Phase 4 | Complete |
+| OLCFG-02 | Phase 4 | Complete |
 | OLCFG-03 | Phase 4 | Pending |
 | PIPE-01 | Phase 4 | Pending |
 | PIPE-02 | Phase 5 | Pending |
