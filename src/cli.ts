@@ -4,6 +4,7 @@ import { EvalRunner, loadTaskConfig } from './evalRunner';
 import { GeminiAgent } from './agents/gemini';
 import { ClaudeAgent } from './agents/claude';
 import { OllamaToolAgent } from './agents/ollama';
+import { DEFAULT_OLLAMA_AGENT_CONFIG } from './agents/ollama/types';
 import { smokeTestToolCalling } from './agents/ollama/smoke-test';
 import { BaseAgent } from './types';
 import * as path from 'path';
@@ -194,7 +195,7 @@ async function main() {
                     const { Ollama } = require('ollama');
                     const client = new Ollama({ host: 'http://localhost:11434' });
                     const running = await client.ps();
-                    const agentModel = 'qwen3-skill-eval-agent';
+                    const agentModel = DEFAULT_OLLAMA_AGENT_CONFIG.model;
                     const others = running.models.filter((m: any) => !m.name.startsWith(agentModel));
 
                     for (const model of others) {
@@ -208,7 +209,7 @@ async function main() {
                     // Ignore -- Ollama may not be running yet
                 }
 
-                const smokeResult = await smokeTestToolCalling('http://localhost:11434', 'qwen3-skill-eval-agent');
+                const smokeResult = await smokeTestToolCalling(DEFAULT_OLLAMA_AGENT_CONFIG.host, DEFAULT_OLLAMA_AGENT_CONFIG.model);
 
                 if (!smokeResult.passed) {
                     console.error(`[ERROR] Ollama smoke test failed: ${smokeResult.error}`);

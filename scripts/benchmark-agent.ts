@@ -216,7 +216,9 @@ function main(): void {
 
     const modelName = DEFAULT_OLLAMA_AGENT_CONFIG.model as string;
     const rootDir = path.resolve(__dirname, '..');
-    const execOpts = { cwd: rootDir, encoding: 'utf-8' as const, timeout: 900_000, stdio: 'pipe' as const };
+    // 600s per trial (10 min ceiling) to avoid killing multi-trial runs
+    const perTrialTimeout = 600_000;
+    const execOpts = { cwd: rootDir, encoding: 'utf-8' as const, timeout: perTrialTimeout, stdio: 'pipe' as const };
 
     // Step 1: Rebuild model if --modelfile provided
     if (args.modelfile) {
@@ -242,33 +244,48 @@ function main(): void {
         }
     }
 
-    // Step 3: Measured trials
+    // Step 3: Measured trials -- run one at a time so each gets its own timeout
     console.error(`[INFO] Running ${args.trials} measured trial(s) for experiment "${args.name}"...`);
-    let rawOutput: string;
+    const trials: TrialData[] = [];
 
-    try {
-        rawOutput = execSync(
-            `npm run eval -- superlint_demo --agent=ollama --provider=local --trials=${args.trials}`,
-            execOpts
-        );
-    } catch (err: any) {
-        // execSync throws on non-zero exit, but stdout may still have data
-        if (err.stdout) {
-            rawOutput = err.stdout;
-            console.error('[WARN] Eval process exited with non-zero code, parsing available output');
-        } else {
-            console.error(`[ERROR] Eval failed: ${err}`);
-            process.exit(1);
+    for (let i = 1; i <= args.trials; i++) {
+        console.error(`[INFO] Trial ${i}/${args.trials}...`);
+        let rawOutput: string;
+
+        try {
+            rawOutput = execSync(
+                'npm run eval -- superlint_demo --agent=ollama --provider=local --trials=1',
+                { ...execOpts, timeout: perTrialTimeout }
+            );
+        } catch (err: any) {
+            // execSync throws on non-zero exit, but stdout may still have data
+            if (err.stdout) {
+                rawOutput = err.stdout;
+                console.error(`[WARN] Trial ${i} process exited with non-zero code, parsing available output`);
+            } else {
+                console.error(`[ERROR] Trial ${i} failed: ${err}`);
+                continue;
+            }
         }
+
+        const parsed = parseEvalOutput(rawOutput);
+
+        if (parsed.length === 0) {
+            console.error(`[WARN] Trial ${i}: could not parse data from output`);
+            console.error('[INFO] Raw output:');
+            console.error(rawOutput);
+            continue;
+        }
+
+        // Re-number the trial
+        const t = parsed[0];
+        t.trial = i;
+        trials.push(t);
+        console.error(`[OK] Trial ${i}: ${t.duration_s}s | reward=${t.reward} | cmds=${t.commands}`);
     }
 
-    // Step 4: Parse output
-    const trials = parseEvalOutput(rawOutput);
-
     if (trials.length === 0) {
-        console.error('[ERROR] Could not parse any trial data from eval output');
-        console.error('[INFO] Raw output follows on stderr:');
-        console.error(rawOutput);
+        console.error('[ERROR] No trials completed successfully');
         process.exit(1);
     }
 

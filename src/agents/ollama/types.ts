@@ -29,7 +29,7 @@ export interface PermissionConfig {
  * Configuration for the OllamaToolAgent.
  */
 export interface OllamaAgentConfig {
-    /** Ollama model name (default: 'qwen3-skill-eval-agent') */
+    /** Ollama model name (default: 'qwen3.5-skill-eval-agent') */
     model: string;
     /** Ollama API host URL (default: 'http://localhost:11434') */
     host: string;
@@ -43,7 +43,7 @@ export interface OllamaAgentConfig {
  * Default configuration values for OllamaToolAgent.
  */
 export const DEFAULT_OLLAMA_AGENT_CONFIG: OllamaAgentConfig = {
-    model: 'qwen3-skill-eval-agent',
+    model: 'qwen3.5-skill-eval-agent',
     host: 'http://localhost:11434',
     maxIterations: 30,
     maxToolOutputChars: 8000,

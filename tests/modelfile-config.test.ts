@@ -16,16 +16,20 @@ function main() {
         }
     }
 
-    // Read Modelfile content
-    const modelfilePath = path.join(__dirname, '..', 'modelfiles', 'qwen3-skill-eval-agent.Modelfile');
+    // Read Modelfile content (current active model: qwen3.5)
+    const modelfilePath = path.join(__dirname, '..', 'modelfiles', 'qwen3.5-skill-eval-agent.Modelfile');
     const content = fs.readFileSync(modelfilePath, 'utf-8');
 
     // Modelfile content assertions
-    assert(content.includes('FROM qwen3:4b'), 'Modelfile contains FROM qwen3:4b');
+    assert(content.includes('FROM qwen3.5:4b'), 'Modelfile contains FROM qwen3.5:4b');
     assert(content.includes('num_ctx 4096'), 'Modelfile contains num_ctx 4096 (OLCFG-01)');
     assert(content.includes('num_predict 4096'), 'Modelfile contains num_predict 4096 (OLCFG-02)');
     assert(content.includes('temperature 0'), 'Modelfile contains temperature 0 (deterministic)');
     assert(content.includes('num_thread 8'), 'Modelfile contains num_thread 8 (CPU cap)');
+
+    // Verify old qwen3 Modelfile still exists as reference
+    const oldModelfilePath = path.join(__dirname, '..', 'modelfiles', 'qwen3-skill-eval-agent.Modelfile');
+    assert(fs.existsSync(oldModelfilePath), 'Old qwen3 Modelfile still exists as reference');
 
     // Types module compile check -- import and verify exports are defined
     const types = require('../src/agents/ollama/types');
@@ -35,8 +39,8 @@ function main() {
         'types.ts exports DEFAULT_OLLAMA_AGENT_CONFIG object'
     );
     assert(
-        types.DEFAULT_OLLAMA_AGENT_CONFIG.model === 'qwen3-skill-eval-agent',
-        'OllamaAgentConfig default model is qwen3-skill-eval-agent'
+        types.DEFAULT_OLLAMA_AGENT_CONFIG.model === 'qwen3.5-skill-eval-agent',
+        'OllamaAgentConfig default model is qwen3.5-skill-eval-agent'
     );
     assert(
         types.DEFAULT_OLLAMA_AGENT_CONFIG.host === 'http://localhost:11434',
