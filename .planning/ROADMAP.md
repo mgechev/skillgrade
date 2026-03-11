@@ -76,6 +76,13 @@ Plans:
 
 **Requirements:** AGENT-02, PIPE-02, PIPE-04
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 05-01-PLAN.md -- OpenCodeAgent class, config template, and unit tests
+- [ ] 05-02-PLAN.md -- CLI wiring with --agent=opencode flag and smoke test
+- [ ] 05-03-PLAN.md -- End-to-end validation with superlint_demo (local + Docker)
+
 **Delivers:**
 - `OpenCodeAgent` class wrapping `opencode run` CLI
 - opencode.json config injection (Ollama provider, model, permissions auto-approve)
@@ -136,7 +143,7 @@ Plans:
 | 3. CI Evaluation Pipeline | v1.0 | 2/2 | Complete | 2026-03-09 |
 | 4. OllamaToolAgent + Ollama Model Setup | v2.0 | 3/3 | Complete | 2026-03-10 |
 | 4.1. Tune Ollama Agent to 5 Min Trial Average | v2.0 | 3/3 | Complete | 2026-03-11 |
-| 5. OpenCodeAgent | v2.0 | 0/? | Pending | -- |
+| 5. OpenCodeAgent | v2.0 | 0/3 | Pending | -- |
 | 6. CI Integration | v2.0 | 0/? | Pending | -- |
 | 7. End-to-End Validation + Comparison | v2.0 | 0/? | Pending | -- |
 
