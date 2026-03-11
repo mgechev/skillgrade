@@ -32,7 +32,7 @@ function loadTaskPermissions(workspacePath: string): {
 const SYSTEM_PROMPT =
     'You are an AI agent that completes coding tasks. Use the provided tools to complete the task. ' +
     'Do not explain your reasoning - just call the appropriate tool. ' +
-    'When you are done, respond with a summary of what you did.';
+    'When you are done, respond with a summary of what you did. /no_think';
 
 /**
  * Prune conversation history to reduce prompt eval time on later turns.
