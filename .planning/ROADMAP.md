@@ -23,7 +23,7 @@ Full details: milestones/v1.0-ROADMAP.md
 
 - [x] Phase 4: OllamaToolAgent + Ollama Model Setup
 - [x] Phase 4.1: Tune Ollama Agent to 5 Min Trial Average
-- [ ] Phase 5: OpenCodeAgent
+- [~] Phase 5: OpenCodeAgent (Plan 03 blocked -- model can't drive multi-step workflow)
 - [ ] Phase 6: CI Integration
 - [ ] Phase 7: End-to-End Validation + Performance Comparison
 
@@ -79,9 +79,9 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 05-01-PLAN.md -- OpenCodeAgent class, config template, and unit tests
-- [ ] 05-02-PLAN.md -- CLI wiring with --agent=opencode flag and smoke test
-- [ ] 05-03-PLAN.md -- End-to-end validation with superlint_demo (local + Docker)
+- [x] 05-01-PLAN.md -- OpenCodeAgent class, config template, and unit tests
+- [x] 05-02-PLAN.md -- CLI wiring with --agent=opencode flag and smoke test
+- [~] 05-03-PLAN.md -- End-to-end validation (BLOCKED: model can't complete multi-step workflow)
 
 **Delivers:**
 - `OpenCodeAgent` class wrapping `opencode run` CLI
@@ -143,7 +143,7 @@ Plans:
 | 3. CI Evaluation Pipeline | v1.0 | 2/2 | Complete | 2026-03-09 |
 | 4. OllamaToolAgent + Ollama Model Setup | v2.0 | 3/3 | Complete | 2026-03-10 |
 | 4.1. Tune Ollama Agent to 5 Min Trial Average | v2.0 | 3/3 | Complete | 2026-03-11 |
-| 5. OpenCodeAgent | v2.0 | 0/3 | Pending | -- |
+| 5. OpenCodeAgent | v2.0 | 2/3 | Blocked (Plan 03) | -- |
 | 6. CI Integration | v2.0 | 0/? | Pending | -- |
 | 7. End-to-End Validation + Comparison | v2.0 | 0/? | Pending | -- |
 
