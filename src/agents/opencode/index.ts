@@ -53,21 +53,36 @@ export class OpenCodeAgent extends BaseAgent {
         ));
 
         const hostnameResult = await runCommand('cat /proc/1/cgroup 2>/dev/null | head -1');
-        const isDocker = hostnameResult.stdout.includes('docker')
+        let inDocker = hostnameResult.stdout.includes('docker')
             || hostnameResult.stdout.includes('kubepods');
 
-        if (!isDocker) {
+        if (!inDocker) {
             // Also check for /workspace path pattern typical of Docker containers
             const pwdResult = await runCommand('pwd');
             const cwd = pwdResult.stdout.trim();
 
             if (cwd.startsWith('/workspace') && process.platform !== 'linux') {
-                configJson.provider.ollama.options.baseURL = 'http://host.docker.internal:11434/v1';
+                inDocker = true;
                 console.log('[OpenCodeAgent] Docker context detected (workspace path) -- using host.docker.internal');
             }
         } else {
-            configJson.provider.ollama.options.baseURL = 'http://host.docker.internal:11434/v1';
             console.log('[OpenCodeAgent] Docker context detected (cgroup) -- using host.docker.internal');
+        }
+
+        if (inDocker) {
+            configJson.provider.ollama.options.baseURL = 'http://host.docker.internal:11434/v1';
+
+            // Install opencode inside the container if not already present
+            const whichResult = await runCommand('which opencode 2>/dev/null');
+
+            if (whichResult.exitCode !== 0) {
+                console.log('[OpenCodeAgent] Installing opencode inside Docker container...');
+                const installResult = await runCommand('npm install -g opencode-ai 2>&1');
+
+                if (installResult.exitCode !== 0) {
+                    console.error('[OpenCodeAgent] Failed to install opencode:', installResult.stdout);
+                }
+            }
         }
 
         const configStr = JSON.stringify(configJson, null, 2);
