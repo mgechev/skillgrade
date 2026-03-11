@@ -1,26 +1,43 @@
 import { Ollama } from 'ollama';
 import { BaseAgent, CommandResult } from '../../types';
-import { DEFAULT_OLLAMA_AGENT_CONFIG } from '../ollama/types';
 import * as path from 'path';
 import * as fs from 'fs';
 
 /**
+ * Model name used by opencode. This is a separate Modelfile variant from the
+ * OllamaToolAgent's model: same base weights (qwen2.5:3b) and parameters
+ * (num_ctx 4096, temperature 0, num_batch 1024) but NO custom system prompt.
+ * Opencode provides its own system prompt and tool definitions via the
+ * OpenAI-compatible API, so the Modelfile must not override them.
+ */
+const OPENCODE_MODEL = 'qwen2.5-3b-opencode-agent';
+
+/**
  * OpenCodeAgent -- wraps the `opencode run` CLI with config injection,
- * timeout protection, and Ollama model unload.
+ * git init for project detection, and Ollama model unload.
  *
  * Follows the established CLI agent pattern (GeminiAgent/ClaudeAgent) with
  * three additions:
  * 1. Config injection: copies opencode.json into workspace CWD before launch
- * 2. Timeout wrapper: uses bash `timeout` command for hang protection
+ * 2. Git init: opencode uses git root detection for project config lookup
  * 3. Model unload: calls keep_alive: 0 in finally block after run completes
+ *
+ * Uses the base qwen2.5:3b model (not the custom Modelfile variant) because
+ * opencode provides its own system prompt and tool definitions via the
+ * OpenAI-compatible API. The custom Modelfile's system prompt conflicts with
+ * opencode's internal prompting, causing the model to produce incompatible
+ * tool call formats.
+ *
+ * Timeout protection is provided by the evalRunner's withTimeout wrapper.
+ * The bash `timeout` command was removed because it causes SIGSEGV when
+ * wrapping the opencode x64 binary under ARM64 QEMU emulation on Windows.
  */
 export class OpenCodeAgent extends BaseAgent {
     private ollamaClient: Ollama;
-    private defaultTimeoutSec: number = 540; // 90% of 600s task timeout
 
     constructor() {
         super();
-        this.ollamaClient = new Ollama({ host: DEFAULT_OLLAMA_AGENT_CONFIG.host });
+        this.ollamaClient = new Ollama({ host: 'http://localhost:11434' });
     }
 
     async run(
@@ -29,49 +46,80 @@ export class OpenCodeAgent extends BaseAgent {
         runCommand: (cmd: string) => Promise<CommandResult>
     ): Promise<string> {
         // 1. Inject opencode.json config into workspace
-        const configContent = fs.readFileSync(
+        //    Detect Docker context and adjust baseURL for host.docker.internal
+        const configJson = JSON.parse(fs.readFileSync(
             path.join(__dirname, 'opencode.skill-eval-agent.json'),
             'utf-8'
-        );
-        const b64Config = Buffer.from(configContent).toString('base64');
+        ));
+
+        const hostnameResult = await runCommand('cat /proc/1/cgroup 2>/dev/null | head -1');
+        const isDocker = hostnameResult.stdout.includes('docker')
+            || hostnameResult.stdout.includes('kubepods');
+
+        if (!isDocker) {
+            // Also check for /workspace path pattern typical of Docker containers
+            const pwdResult = await runCommand('pwd');
+            const cwd = pwdResult.stdout.trim();
+
+            if (cwd.startsWith('/workspace') && process.platform !== 'linux') {
+                configJson.provider.ollama.options.baseURL = 'http://host.docker.internal:11434/v1';
+                console.log('[OpenCodeAgent] Docker context detected (workspace path) -- using host.docker.internal');
+            }
+        } else {
+            configJson.provider.ollama.options.baseURL = 'http://host.docker.internal:11434/v1';
+            console.log('[OpenCodeAgent] Docker context detected (cgroup) -- using host.docker.internal');
+        }
+
+        const configStr = JSON.stringify(configJson, null, 2);
+        const b64Config = Buffer.from(configStr).toString('base64');
         await runCommand(`echo '${b64Config}' | base64 -d > opencode.json`);
 
-        // 2. Log model for diagnostics
-        console.log(`[OpenCodeAgent] Using model: ${DEFAULT_OLLAMA_AGENT_CONFIG.model}`);
+        // 2. Initialize git repo -- opencode uses git root for project config lookup
+        await runCommand('git init -q 2>/dev/null || true');
 
-        // 3. Write instruction to temp file (established base64 pattern)
+        // 3. Log model for diagnostics
+        console.log(`[OpenCodeAgent] Using model: ${OPENCODE_MODEL}`);
+
+        // 4. Write instruction to temp file (established base64 pattern)
         const b64 = Buffer.from(instruction).toString('base64');
         await runCommand(`echo '${b64}' | base64 -d > /tmp/.prompt.md`);
 
         try {
-            // 4. Invoke opencode with timeout wrapper for hang protection
-            const timeoutSec = this.defaultTimeoutSec;
-            const command = `timeout --signal=TERM --kill-after=10 ${timeoutSec} opencode run "$(cat /tmp/.prompt.md)"`;
-            const result = await runCommand(command);
+            // 5. Invoke opencode with retry logic for SIGSEGV (exit 139).
+            //    The opencode x64 binary intermittently segfaults under ARM64
+            //    QEMU emulation. Retrying usually succeeds. Stdin is redirected
+            //    from a regular file to reduce (but not eliminate) crash frequency.
+            //    The evalRunner's withTimeout provides the outer timeout protection.
+            const maxRetries = 3;
+            let lastResult: CommandResult | null = null;
 
-            if (result.exitCode === 124) {
-                console.error(`[OpenCodeAgent] opencode killed by timeout after ${timeoutSec}s`);
-            } else if (result.exitCode === 127) {
-                // timeout command not found -- fall back to running without timeout wrapper
-                console.warn('[OpenCodeAgent] timeout command not available, running without timeout wrapper');
-                const fallbackCommand = `opencode run "$(cat /tmp/.prompt.md)"`;
-                const fallbackResult = await runCommand(fallbackCommand);
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                const result = await runCommand(`opencode run "$(cat /tmp/.prompt.md)" < /tmp/.prompt.md`);
+                lastResult = result;
 
-                if (fallbackResult.exitCode !== 0) {
-                    console.error('[OpenCodeAgent] opencode exited with code:', fallbackResult.exitCode);
+                if (result.exitCode === 139) {
+                    console.warn(`[OpenCodeAgent] SIGSEGV on attempt ${attempt}/${maxRetries} (x64 emulation instability)`);
+
+                    if (attempt < maxRetries) {
+                        continue;
+                    }
                 }
 
-                return fallbackResult.stdout + '\n' + fallbackResult.stderr;
-            } else if (result.exitCode !== 0) {
+                break;
+            }
+
+            const result = lastResult!;
+
+            if (result.exitCode !== 0) {
                 console.error('[OpenCodeAgent] opencode exited with code:', result.exitCode);
             }
 
             return result.stdout + '\n' + result.stderr;
         } finally {
-            // 5. Unload model (safety net, same pattern as OllamaToolAgent)
+            // 6. Unload model (safety net, same pattern as OllamaToolAgent)
             try {
                 await this.ollamaClient.chat({
-                    model: DEFAULT_OLLAMA_AGENT_CONFIG.model,
+                    model: OPENCODE_MODEL,
                     messages: [],
                     keep_alive: 0,
                 });
