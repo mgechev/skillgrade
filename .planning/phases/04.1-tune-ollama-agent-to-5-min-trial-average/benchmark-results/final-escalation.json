@@ -1,0 +1,31 @@
+{
+  "name": "final-escalation",
+  "timestamp": "2026-03-11T11:28:25.800Z",
+  "modelfile": null,
+  "trials": [
+    {
+      "trial": 1,
+      "duration_s": 55.2,
+      "reward": 0.97,
+      "commands": 3
+    },
+    {
+      "trial": 2,
+      "duration_s": 58.7,
+      "reward": 0.97,
+      "commands": 3
+    },
+    {
+      "trial": 3,
+      "duration_s": 59,
+      "reward": 0.97,
+      "commands": 3
+    }
+  ],
+  "avg_duration_s": 57.6,
+  "std_dev_s": 2.1,
+  "avg_reward": 0.97,
+  "avg_commands": 3,
+  "target_met": true,
+  "reward_met": true
+}
