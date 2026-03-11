@@ -97,6 +97,16 @@ Plans:
 
 ---
 
+### Phase 05.1: Tune OpenCodeAgent for Multi-Step Tool Execution (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 5
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 05.1 to break down)
+
 #### Phase 6: CI Integration
 
 **Goal:** Both agent backends run in CI with proper setup actions.

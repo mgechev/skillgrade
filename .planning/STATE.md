@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 
 ## Current Position
 
-Phase: Phase 5 (OpenCodeAgent)
-Plan: 2 of 3 complete
-Status: Plan 02 complete -- CLI wiring with --agent=opencode flag, smoke test, and 7 tests.
-Last activity: 2026-03-11 -- Phase 5 Plan 02 complete (CLI wiring for OpenCodeAgent)
+Phase: Phase 5.1 (Tune OpenCodeAgent for Multi-Step Tool Execution)
+Plan: 0 -- not yet planned
+Status: Phase 5 Plan 03 closed as blocked. Phase 5.1 inserted for research + debug.
+Last activity: 2026-03-11 -- Phase 5 Plan 03 closed (blocked: model can't drive multi-step workflow)
 
 ## Accumulated Context
 
@@ -70,6 +70,7 @@ None.
 ### Roadmap Evolution
 
 - Phase 4.1 added: Tune Ollama agent to 5 min trial average (model/Ollama parameters, prompt engineering, alternative models)
+- Phase 5.1 inserted after Phase 5: Tune OpenCodeAgent for Multi-Step Tool Execution (URGENT) -- Plan 05-03 blocked, model can't complete 3-step workflow through opencode
 
 ### Blockers/Concerns
 
