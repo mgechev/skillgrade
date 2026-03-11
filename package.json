@@ -18,6 +18,7 @@
     "test:cli-ollama-flag": "ts-node tests/cli-ollama-flag.test.ts",
     "test:smoke-gate": "ts-node tests/smoke-gate.test.ts",
     "test:model-unload": "ts-node tests/model-unload.test.ts",
+    "test:opencode-agent": "ts-node tests/opencode-agent.test.ts",
     "eval": "ts-node src/cli.ts",
     "eval:superlint": "npm run eval -- superlint_demo --agent=claude --provider=local",
     "eval:superlint:docker": "npm run eval -- superlint_demo --agent=claude --provider=docker",
