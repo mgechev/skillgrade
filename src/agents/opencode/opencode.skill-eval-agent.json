@@ -8,21 +8,25 @@
         "baseURL": "http://localhost:11434/v1"
       },
       "models": {
-        "qwen3.5-4b-opencode-agent": {
-          "name": "Qwen 3.5 4B OpenCode Agent",
+        "qwen3-4b-opencode-agent": {
+          "name": "Qwen3 4B OpenCode Agent",
           "tools": true
         }
       }
     }
   },
-  "model": "ollama/qwen3.5-4b-opencode-agent",
+  "model": "ollama/qwen3-4b-opencode-agent",
   "permission": {
     "read": "allow",
     "edit": "allow",
     "bash": "allow",
-    "glob": "allow",
-    "grep": "allow",
-    "list": "allow",
+    "write": "allow",
+    "glob": "deny",
+    "grep": "deny",
+    "list": "deny",
+    "task": "deny",
+    "todowrite": "deny",
+    "skill": "deny",
     "webfetch": "deny",
     "websearch": "deny",
     "codesearch": "deny",
