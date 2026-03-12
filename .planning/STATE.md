@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: opencode + Ollama Agent Backends
-status: Phase 5 Plan 03 closed as blocked. Phase 5.1 inserted for research + debug.
-stopped_at: Phase 5.1 context gathered
-last_updated: "2026-03-11T22:13:59.474Z"
-last_activity: "2026-03-11 -- Phase 5 Plan 03 closed (blocked: model can't drive multi-step workflow)"
+status: Phase 5.1 complete. Both providers validated (Docker 0.98, Local 0.97 avg reward).
+stopped_at: Phase 5.1 closed, ready for Phase 6
+last_updated: "2026-03-12T22:30:00.000Z"
+last_activity: "2026-03-12 -- Phase 5.1 closed (qwen3:1.7b + prompt fix, both providers 3-trial validated)"
 progress:
   total_phases: 6
-  completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
+  completed_phases: 4
+  total_plans: 12
+  completed_plans: 12
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 
 ## Current Position
 
-Phase: Phase 5.1 (Tune OpenCodeAgent for Multi-Step Tool Execution)
+Phase: Phase 6 (CI Integration) -- ready to plan
 Plan: 0 -- not yet planned
-Status: Phase 5 Plan 03 closed as blocked. Phase 5.1 inserted for research + debug.
-Last activity: 2026-03-11 -- Phase 5 Plan 03 closed (blocked: model can't drive multi-step workflow)
+Status: Phase 5.1 complete. Ready for Phase 6.
+Last activity: 2026-03-12 -- Phase 5.1 closed (both providers validated, Plans 02/03 superseded)
 
 ## Accumulated Context
 
@@ -88,6 +88,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T22:13:59.472Z
-Stopped at: Phase 5.1 context gathered
-Resume file: .planning/phases/05.1-tune-opencodeagent-for-multi-step-tool-execution/05.1-CONTEXT.md
+Last session: 2026-03-12T22:30:00.000Z
+Stopped at: Phase 5.1 closed, proceeding to Phase 6
+Resume file: none
