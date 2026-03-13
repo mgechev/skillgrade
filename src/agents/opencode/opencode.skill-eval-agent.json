@@ -8,7 +8,7 @@
         "baseURL": "http://localhost:11434/v1"
       },
       "models": {
-        "qwen3-4b-opencode-agent": {
+        "qwen3-4b-skill-eval-opencode-agent": {
           "name": "Qwen3 4B OpenCode Agent",
           "tools": true
         }

@@ -4,7 +4,7 @@
 # Qwen 3.5 has broken tool calling on Ollama (issues #14493, #14745).
 # NO custom SYSTEM prompt -- opencode provides its own.
 #
-# To create: ollama create qwen3-4b-opencode-agent -f qwen3-4b-opencode-agent.Modelfile
+# To create: ollama create qwen3-4b-skill-eval-opencode-agent -f qwen3-4b-skill-eval-opencode-agent.Modelfile
 
 FROM qwen3:4b
 PARAMETER num_ctx 4096

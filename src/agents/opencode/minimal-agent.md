@@ -1,7 +1,7 @@
 ---
 name: minimal
 description: Execute bash commands to complete coding tasks. Be concise and direct.
-model: ollama/qwen3-4b-opencode-agent
+model: ollama/qwen3-4b-skill-eval-opencode-agent
 tools:
   bash: true
   read: true

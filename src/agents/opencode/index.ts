@@ -11,7 +11,7 @@ import * as fs from 'fs';
  * - Only Qwen3 family produces structured tool calls on Ollama
  * NO custom system prompt -- opencode provides its own via the OpenAI-compatible API.
  */
-const OPENCODE_MODEL = 'qwen3-4b-opencode-agent';
+const OPENCODE_MODEL = 'qwen3-4b-skill-eval-opencode-agent';
 
 /**
  * OpenCodeAgent -- wraps the `opencode run` CLI with config injection,
