@@ -206,15 +206,19 @@ Final reward = `Σ (grader_score × weight) / Σ weight`
 
 ## CI Integration
 
+Use `--provider=local` in CI — the runner is already an ephemeral sandbox, so Docker adds overhead without benefit.
+
 ```yaml
 # .github/workflows/skillgrade.yml
 - run: |
     npm i -g skillgrade
     cd skills/superlint
-    GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} skillgrade --regression --ci
+    GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} skillgrade --regression --ci --provider=local
 ```
 
 Exits with code 1 if pass rate falls below `--threshold` (default: 0.8).
+
+> **Tip**: Use `docker` (the default) for local development to protect your machine. In CI, `local` is faster and simpler.
 
 ## Environment Variables
 
