@@ -23,7 +23,7 @@ export class DockerProvider implements EnvironmentProvider {
         this.envPairs = env ? Object.entries(env).map(([k, v]) => `${k}=${v}`) : [];
 
         const safeName = path.basename(taskPath).toLowerCase().replace(/[^a-z0-9._-]/g, '-');
-        const baseName = `skilleval-${safeName}-${Date.now()}`;
+        const baseName = `skillgrade-${safeName}-${Date.now()}`;
 
         // Build image from Dockerfile
         const stream = await this.docker.buildImage({

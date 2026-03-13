@@ -1,13 +1,13 @@
 # Superlint Example (Simple)
 #
-# This example demonstrates a basic skilleval setup with:
+# This example demonstrates a basic skillgrade setup with:
 # - A simple bash deterministic grader
 # - An LLM rubric for qualitative assessment
 # - Workspace file mapping (fixtures + tool binary)
 #
 # Run:
 #   cd examples/superlint
-#   GEMINI_API_KEY=your-key skilleval --smoke
+#   GEMINI_API_KEY=your-key skillgrade --smoke
 
 version: "1"
 

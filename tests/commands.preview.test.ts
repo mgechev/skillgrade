@@ -52,7 +52,7 @@ describe('runPreview', () => {
     await runPreview('/project', 'cli');
 
     const calledPath = mockRunCliPreview.mock.calls[0][0];
-    expect(calledPath).toContain('skilleval');
+    expect(calledPath).toContain('skillgrade');
     expect(calledPath).toContain('project');
     expect(calledPath).toContain('results');
   });

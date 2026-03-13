@@ -8,7 +8,7 @@ describe('runCliPreview', () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = path.join(os.tmpdir(), `skilleval-cli-test-${Date.now()}`);
+    tempDir = path.join(os.tmpdir(), `skillgrade-cli-test-${Date.now()}`);
     await fsExtra.ensureDir(tempDir);
     vi.spyOn(console, 'log').mockImplementation(() => {});
   });

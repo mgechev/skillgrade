@@ -11,14 +11,14 @@ See [examples/](examples/) — [superlint](examples/superlint/) (simple) and [an
 **Prerequisites**: Node.js 20+, Docker
 
 ```bash
-npm i -g skilleval
+npm i -g skillgrade
 ```
 
 **1. Initialize** — go to your skill directory (must have `SKILL.md`) and scaffold:
 
 ```bash
 cd my-skill/
-GEMINI_API_KEY=your-key skilleval init    # or ANTHROPIC_API_KEY
+GEMINI_API_KEY=your-key skillgrade init    # or ANTHROPIC_API_KEY
 # Use --force to overwrite an existing eval.yaml
 ```
 
@@ -29,7 +29,7 @@ Generates `eval.yaml` with AI-powered tasks and graders. Without an API key, cre
 **3. Run**:
 
 ```bash
-GEMINI_API_KEY=your-key skilleval --smoke
+GEMINI_API_KEY=your-key skillgrade --smoke
 ```
 
 The agent is auto-detected from your API key: `GEMINI_API_KEY` → Gemini, `ANTHROPIC_API_KEY` → Claude, `OPENAI_API_KEY` → Codex. Override with `--agent=claude`.
@@ -37,11 +37,11 @@ The agent is auto-detected from your API key: `GEMINI_API_KEY` → Gemini, `ANTH
 **4. Review**:
 
 ```bash
-skilleval preview          # CLI report
-skilleval preview browser  # web UI → http://localhost:3847
+skillgrade preview          # CLI report
+skillgrade preview browser  # web UI → http://localhost:3847
 ```
 
-Reports are saved to `$TMPDIR/skilleval/<skill-name>/results/`. Override with `--output=DIR`.
+Reports are saved to `$TMPDIR/skillgrade/<skill-name>/results/`. Override with `--output=DIR`.
 
 ## Presets
 
@@ -59,7 +59,7 @@ Reports are saved to `$TMPDIR/skilleval/<skill-name>/results/`. Override with `-
 | `--parallel=N` | Run trials concurrently |
 | `--agent=gemini\|claude\|codex` | Override agent (default: auto-detect from API key) |
 | `--provider=docker\|local` | Override provider |
-| `--output=DIR` | Output directory (default: `$TMPDIR/skilleval`) |
+| `--output=DIR` | Output directory (default: `$TMPDIR/skillgrade`) |
 | `--validate` | Verify graders using reference solutions |
 | `--ci` | CI mode: exit non-zero if below threshold |
 | `--threshold=0.8` | Pass rate threshold for CI mode |
@@ -207,11 +207,11 @@ Final reward = `Σ (grader_score × weight) / Σ weight`
 ## CI Integration
 
 ```yaml
-# .github/workflows/skilleval.yml
+# .github/workflows/skillgrade.yml
 - run: |
-    npm i -g skilleval
+    npm i -g skillgrade
     cd skills/superlint
-    GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} skilleval --regression --ci
+    GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} skillgrade --regression --ci
 ```
 
 Exits with code 1 if pass rate falls below `--threshold` (default: 0.8).
@@ -220,8 +220,8 @@ Exits with code 1 if pass rate falls below `--threshold` (default: 0.8).
 
 | Variable | Used by |
 |----------|---------|
-| `GEMINI_API_KEY` | Agent execution, LLM grading, `skilleval init` |
-| `ANTHROPIC_API_KEY` | Agent execution, LLM grading, `skilleval init` |
+| `GEMINI_API_KEY` | Agent execution, LLM grading, `skillgrade init` |
+| `ANTHROPIC_API_KEY` | Agent execution, LLM grading, `skillgrade init` |
 | `OPENAI_API_KEY` | Agent execution (Codex) |
 
 Variables are also loaded from `.env` in the skill directory. Shell values override `.env`. All values are **redacted** from persisted session logs.

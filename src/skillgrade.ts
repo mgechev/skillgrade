@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * skilleval CLI
+ * skillgrade CLI
  *
  * Usage:
- *   skilleval                     Run all eval tasks from eval.yaml
- *   skilleval init                Generate eval.yaml from detected skills
- *   skilleval preview [browser]   View results (CLI default, or browser)
- *   skilleval <task-name>         Run a specific task
+ *   skillgrade                     Run all eval tasks from eval.yaml
+ *   skillgrade init                Generate eval.yaml from detected skills
+ *   skillgrade preview [browser]   View results (CLI default, or browser)
+ *   skillgrade <task-name>         Run a specific task
  *
  * Options:
  *   --trials=N         Override trial count
@@ -51,7 +51,7 @@ async function main() {
 
     if (command === 'preview') {
         const mode = args[1] === 'browser' ? 'browser' : 'cli';
-        const outputDir = getFlag('output') || path.join(os.tmpdir(), 'skilleval');
+        const outputDir = getFlag('output') || path.join(os.tmpdir(), 'skillgrade');
         await runPreview(cwd, mode, outputDir);
         return;
     }
@@ -76,7 +76,7 @@ async function main() {
 
     const explicitTrials = getFlag('trials') ? parseInt(getFlag('trials')!) : undefined;
 
-    const outputDir = getFlag('output') || path.join(os.tmpdir(), 'skilleval');
+    const outputDir = getFlag('output') || path.join(os.tmpdir(), 'skillgrade');
 
     await runEvals(cwd, {
         task: taskName,
@@ -98,13 +98,13 @@ async function main() {
 
 function printHelp() {
     console.log(`
-  📊 skilleval — Evaluation framework for Agent Skills
+  📊 skillgrade — Evaluation framework for Agent Skills
 
   Usage:
-    skilleval                     Run all tasks from eval.yaml
-    skilleval init [--force]      Generate eval.yaml (--force to overwrite)
-    skilleval preview [browser]   View results (CLI default, or browser)
-    skilleval <task-name>         Run a specific task
+    skillgrade                     Run all tasks from eval.yaml
+    skillgrade init [--force]      Generate eval.yaml (--force to overwrite)
+    skillgrade preview [browser]   View results (CLI default, or browser)
+    skillgrade <task-name>         Run a specific task
 
   Presets:
     --smoke            Quick smoke test (5 trials, reports pass@k)
@@ -117,19 +117,19 @@ function printHelp() {
     --agent=gemini|claude|codex   Override agent (default: auto-detect from API key)
     --provider=docker|local Override provider (default: docker)
     --output=DIR       Output directory for reports and temp files
-                       Default: $TMPDIR/skilleval
+                       Default: $TMPDIR/skillgrade
     --validate         Verify graders using reference solutions
     --ci               CI mode: exit non-zero if below threshold
     --threshold=0.8    Pass rate threshold for CI mode
     --preview          Open CLI results after running
 
   Examples:
-    skilleval init                # scaffold eval.yaml
-    skilleval init --force        # overwrite existing eval.yaml
-    skilleval                     # run all evals
-    skilleval --smoke             # quick 5-trial smoke test
-    skilleval --regression --ci   # CI regression with 30 trials
-    skilleval preview browser     # open web UI
+    skillgrade init                # scaffold eval.yaml
+    skillgrade init --force        # overwrite existing eval.yaml
+    skillgrade                     # run all evals
+    skillgrade --smoke             # quick 5-trial smoke test
+    skillgrade --regression --ci   # CI regression with 30 trials
+    skillgrade preview browser     # open web UI
 `);
 }
 

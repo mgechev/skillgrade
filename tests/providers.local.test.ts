@@ -19,7 +19,7 @@ describe('LocalProvider', () => {
   describe('setup', () => {
     it('creates a temp directory and copies task files', async () => {
       // Create a real temp task directory
-      const taskDir = path.join(os.tmpdir(), `skilleval-test-task-${Date.now()}`);
+      const taskDir = path.join(os.tmpdir(), `skillgrade-test-task-${Date.now()}`);
       await fsExtra.ensureDir(taskDir);
       await fsExtra.writeFile(path.join(taskDir, 'task.toml'), 'version = "1"');
       tempDirs.push(taskDir);
@@ -35,14 +35,14 @@ describe('LocalProvider', () => {
       const workspace = await provider.setup(taskDir, [], taskConfig);
       tempDirs.push(workspace);
 
-      expect(workspace).toContain('skilleval-');
+      expect(workspace).toContain('skillgrade-');
       expect(await fsExtra.pathExists(workspace)).toBe(true);
       expect(await fsExtra.pathExists(path.join(workspace, 'task.toml'))).toBe(true);
     });
 
     it('injects skills into discovery directories', async () => {
-      const taskDir = path.join(os.tmpdir(), `skilleval-test-task-${Date.now()}`);
-      const skillDir = path.join(os.tmpdir(), `skilleval-test-skill-${Date.now()}`);
+      const taskDir = path.join(os.tmpdir(), `skillgrade-test-task-${Date.now()}`);
+      const skillDir = path.join(os.tmpdir(), `skillgrade-test-skill-${Date.now()}`);
       await fsExtra.ensureDir(taskDir);
       await fsExtra.ensureDir(skillDir);
       await fsExtra.writeFile(path.join(skillDir, 'SKILL.md'), '# Test Skill');
@@ -72,7 +72,7 @@ describe('LocalProvider', () => {
 
   describe('cleanup', () => {
     it('removes the workspace directory', async () => {
-      const tempDir = path.join(os.tmpdir(), `skilleval-cleanup-test-${Date.now()}`);
+      const tempDir = path.join(os.tmpdir(), `skillgrade-cleanup-test-${Date.now()}`);
       await fsExtra.ensureDir(tempDir);
       await fsExtra.writeFile(path.join(tempDir, 'file.txt'), 'test');
 
@@ -88,7 +88,7 @@ describe('LocalProvider', () => {
 
   describe('runCommand', () => {
     it('executes a command and captures stdout', async () => {
-      const tempDir = path.join(os.tmpdir(), `skilleval-cmd-test-${Date.now()}`);
+      const tempDir = path.join(os.tmpdir(), `skillgrade-cmd-test-${Date.now()}`);
       await fsExtra.ensureDir(tempDir);
       tempDirs.push(tempDir);
 
@@ -98,7 +98,7 @@ describe('LocalProvider', () => {
     });
 
     it('captures stderr', async () => {
-      const tempDir = path.join(os.tmpdir(), `skilleval-cmd-test-${Date.now()}`);
+      const tempDir = path.join(os.tmpdir(), `skillgrade-cmd-test-${Date.now()}`);
       await fsExtra.ensureDir(tempDir);
       tempDirs.push(tempDir);
 
@@ -107,7 +107,7 @@ describe('LocalProvider', () => {
     });
 
     it('returns non-zero exit code', async () => {
-      const tempDir = path.join(os.tmpdir(), `skilleval-cmd-test-${Date.now()}`);
+      const tempDir = path.join(os.tmpdir(), `skillgrade-cmd-test-${Date.now()}`);
       await fsExtra.ensureDir(tempDir);
       tempDirs.push(tempDir);
 
@@ -116,7 +116,7 @@ describe('LocalProvider', () => {
     });
 
     it('passes environment variables', async () => {
-      const tempDir = path.join(os.tmpdir(), `skilleval-cmd-test-${Date.now()}`);
+      const tempDir = path.join(os.tmpdir(), `skillgrade-cmd-test-${Date.now()}`);
       await fsExtra.ensureDir(tempDir);
       tempDirs.push(tempDir);
 
@@ -125,7 +125,7 @@ describe('LocalProvider', () => {
     });
 
     it('runs command in the correct working directory', async () => {
-      const tempDir = path.join(os.tmpdir(), `skilleval-cmd-test-${Date.now()}`);
+      const tempDir = path.join(os.tmpdir(), `skillgrade-cmd-test-${Date.now()}`);
       await fsExtra.ensureDir(tempDir);
       tempDirs.push(tempDir);
 

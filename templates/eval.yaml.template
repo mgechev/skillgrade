@@ -2,11 +2,11 @@
 # Edit the tasks below to define evaluations for your skill.
 #
 # Usage:
-#   skilleval          Run all tasks
-#   skilleval --validate   Verify graders using reference solutions
-#   skilleval --preview    Open web UI for results
+#   skillgrade          Run all tasks
+#   skillgrade --validate   Verify graders using reference solutions
+#   skillgrade --preview    Open web UI for results
 #
-# Documentation: https://github.com/mgechev/skilleval#readme
+# Documentation: https://github.com/mgechev/skillgrade#readme
 
 version: "1"
 

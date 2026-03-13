@@ -1,14 +1,18 @@
 {
-  "name": "skilleval",
+  "name": "skillgrade",
   "version": "0.0.1",
   "description": "Evaluation framework for Agent Skills — test that AI agents correctly discover and use your skills",
-  "main": "dist/skilleval.js",
-  "types": "dist/skilleval.d.ts",
+  "main": "dist/skillgrade.js",
+  "types": "dist/skillgrade.d.ts",
   "bin": {
-    "skilleval": "./bin/skilleval.js"
+    "skillgrade": "./bin/skillgrade.js"
   },
   "files": [
-    "dist/",
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/viewer.html",
+    "!dist/**/*.js.map",
+    "!dist/**/*.d.ts.map",
     "bin/",
     "templates/",
     "README.md",
@@ -17,7 +21,7 @@
   "scripts": {
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "dev": "ts-node src/skilleval.ts",
+    "dev": "ts-node src/skillgrade.ts",
     "build": "tsc -p tsconfig.build.json && cp src/viewer.html dist/viewer.html",
     "prepublishOnly": "npm run build"
   },
@@ -29,6 +33,8 @@
     "benchmark",
     "gemini",
     "claude",
+    "codex",
+    "openai",
     "llm",
     "testing"
   ],
@@ -37,9 +43,9 @@
   "type": "commonjs",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mgechev/skilleval"
+    "url": "https://github.com/mgechev/skillgrade"
   },
-  "homepage": "https://github.com/mgechev/skilleval#readme",
+  "homepage": "https://github.com/mgechev/skillgrade#readme",
   "engines": {
     "node": ">=20.0.0"
   },

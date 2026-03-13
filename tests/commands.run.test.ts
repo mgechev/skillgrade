@@ -34,7 +34,7 @@ function resolvedToTaskConfig(resolved: ResolvedTask): TaskConfig {
       author_name: '',
       author_email: '',
       difficulty: 'medium',
-      category: 'skilleval',
+      category: 'skillgrade',
       tags: [],
     },
     graders: resolved.graders.map(g => ({
@@ -166,7 +166,7 @@ describe('resolvedToTaskConfig', () => {
 
     const config = resolvedToTaskConfig(resolved);
     expect(config.metadata.difficulty).toBe('medium');
-    expect(config.metadata.category).toBe('skilleval');
+    expect(config.metadata.category).toBe('skillgrade');
     expect(config.version).toBe('1');
   });
 });

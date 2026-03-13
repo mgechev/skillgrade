@@ -7,12 +7,20 @@ assets/
 # Config and dev files
 tsconfig.json
 tsconfig.build.json
+vitest.config.*
 .env
 .env.*
+
+# Source maps (not needed for consumers)
+dist/**/*.js.map
+dist/**/*.d.ts.map
 
 # IDE and OS
 .vscode/
 .idea/
+.gemini/
+.agents/
+.github/
 .DS_Store
 *.swp
-
+coverage/
