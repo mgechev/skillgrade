@@ -179,7 +179,7 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0, maxOutputTokens: 256 }
+                    generationConfig: { temperature: 0, maxOutputTokens: 1024 }
                 })
             });
 
@@ -203,7 +203,7 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
                 },
                 body: JSON.stringify({
                     model,
-                    max_tokens: 256,
+                    max_tokens: 1024,
                     messages: [{ role: 'user', content: prompt }]
                 })
             });
