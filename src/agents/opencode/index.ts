@@ -143,13 +143,31 @@ export class OpenCodeAgent extends BaseAgent {
 
             return result.stdout + '\n' + result.stderr;
         } finally {
-            // 6. Unload model (safety net, same pattern as OllamaToolAgent)
+            // 6. Unload model and wait for eviction so the LLM grader
+            //    (qwen2.5:3b) can load without memory contention.
+            //    keep_alive: 0 is async -- the model may still be resident
+            //    when the call returns. Poll ollama ps to confirm eviction.
             try {
                 await this.ollamaClient.chat({
                     model: OPENCODE_MODEL,
                     messages: [],
                     keep_alive: 0,
                 });
+
+                const maxWaitMs = 15_000;
+                const pollMs = 500;
+                const deadline = Date.now() + maxWaitMs;
+
+                while (Date.now() < deadline) {
+                    const ps = await this.ollamaClient.ps();
+                    const still = ps.models.some(m => m.name.startsWith(OPENCODE_MODEL));
+
+                    if (!still) {
+                        break;
+                    }
+
+                    await new Promise(r => setTimeout(r, pollMs));
+                }
             } catch {
                 // Ignore unload errors -- model may already be unloaded
             }
