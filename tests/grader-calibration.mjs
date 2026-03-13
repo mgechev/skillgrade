@@ -48,12 +48,23 @@ const variants = [
     transcript: `## Task Instruction\nUse the superlint CLI tool to check, fix, and verify app.js.\n## Agent Output\nI was unable to complete the task.\n## Prior Grader Results (automated tests)\n- deterministic: score=0.00 - Failed` },
 ];
 
-// Extract individual criteria from rubric bullet points
-const criteriaLines = rubric
-  .split('\n')
-  .map(line => line.trim())
-  .filter(line => line.startsWith('- '))
-  .map(line => line.replace(/^- /, ''));
+// Extract criteria from rubric, tracking section headers (mirrors parseResponse logic)
+const criteriaLines = [];
+const criteriaSections = new Map();
+let currentSection = '';
+
+for (const rawLine of rubric.split('\n')) {
+  const line = rawLine.trim();
+  const sectionMatch = line.match(/^#{1,3}\s+(.+)/);
+
+  if (sectionMatch) {
+    currentSection = sectionMatch[1].toLowerCase();
+  } else if (line.startsWith('- ')) {
+    const criterion = line.replace(/^- /, '');
+    criteriaLines.push(criterion);
+    criteriaSections.set(criterion, currentSection);
+  }
+}
 
 const numberedCriteria = criteriaLines
   .map((c, i) => `${i + 1}. ${c}`)
@@ -123,9 +134,44 @@ async function grade(v) {
   // Compute score using dimension-aware weighting (matches parseResponse logic)
   let score;
   if (Array.isArray(parsed.criteria) && parsed.criteria.length > 0) {
-    // Must match parseResponse in src/graders/index.ts
-    const isWorkflow = (text) => /workflow|compliance|mandatory|step.*order|before.*attempt|follow.*step/i.test(text);
-    const isEfficiency = (text) => /efficien|redundan|trial.and.error|reasonable.*command|unnecessary/i.test(text);
+    // Section-based classification (must match parseResponse in src/graders/index.ts)
+    const sectionOf = (criterion) => {
+      const exact = criteriaSections.get(criterion);
+
+      if (exact) {
+        return exact;
+      }
+
+      const needle = criterion.toLowerCase().substring(0, 40);
+
+      for (const [rubricCriterion, section] of criteriaSections) {
+        if (rubricCriterion.toLowerCase().substring(0, 40) === needle) {
+          return section;
+        }
+      }
+
+      return '';
+    };
+
+    const isWorkflow = (criterion) => {
+      const section = sectionOf(criterion);
+
+      if (section) {
+        return /workflow|compliance/i.test(section);
+      }
+
+      return /workflow|compliance|mandatory/i.test(criterion);
+    };
+
+    const isEfficiency = (criterion) => {
+      const section = sectionOf(criterion);
+
+      if (section) {
+        return /efficien/i.test(section);
+      }
+
+      return /efficien|redundan|trial.and.error|reasonable.*command|unnecessary/i.test(criterion);
+    };
 
     // Technique A: Workflow gate for efficiency
     const workflowCriteria = parsed.criteria.filter(c => isWorkflow(c.criterion));

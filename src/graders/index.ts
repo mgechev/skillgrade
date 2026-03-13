@@ -57,6 +57,9 @@ export class DeterministicGrader implements Grader {
 export class LLMGrader implements Grader {
     private warnedAboutConfig = false;
     private warmedUp = false;
+    // Set by grade() before any provider call, consumed by parseResponse.
+    // Maps criterion text → rubric section header (lowercased).
+    private criteriaSections: Map<string, string> = new Map();
 
     private warnOllamaConfig(): void {
         if (this.warnedAboutConfig) {
@@ -139,12 +142,28 @@ export class LLMGrader implements Grader {
 
         const rubric = await fs.readFile(rubricPath, 'utf-8');
 
-        // Extract individual criteria from rubric bullet points (lines starting with "- ")
-        const criteriaLines = rubric
-            .split('\n')
-            .map(line => line.trim())
-            .filter(line => line.startsWith('- '))
-            .map(line => line.replace(/^- /, ''));
+        // Extract criteria from rubric, tracking which section header each belongs to.
+        // Section headers (e.g., "## Workflow Compliance (0-0.4)") drive dimension-aware
+        // scoring in parseResponse — this is how we classify criteria generically without
+        // keyword-matching on criterion text.
+        const criteriaLines: string[] = [];
+        const criteriaSections: Map<string, string> = new Map();
+        let currentSection = '';
+
+        for (const rawLine of rubric.split('\n')) {
+            const line = rawLine.trim();
+            const sectionMatch = line.match(/^#{1,3}\s+(.+)/);
+
+            if (sectionMatch) {
+                currentSection = sectionMatch[1].toLowerCase();
+            } else if (line.startsWith('- ')) {
+                const criterion = line.replace(/^- /, '');
+                criteriaLines.push(criterion);
+                criteriaSections.set(criterion, currentSection);
+            }
+        }
+
+        this.criteriaSections = criteriaSections;
 
         // Build a comprehensive transcript for the LLM
         const sections: string[] = [];
@@ -454,14 +473,49 @@ Respond with ONLY a JSON object: {"commands_found": ["cmd1", ...], "criteria": [
                 // decomposition dramatically improves small-model judge reliability
                 // over holistic scoring.
                 if (Array.isArray(parsed.criteria) && parsed.criteria.length > 0) {
-                    // Classify criteria by rubric dimension using generic keyword patterns.
-                    // "Workflow/compliance" = core task steps; "Efficiency" = resource usage.
-                    // These patterns are intentionally broad to work across different task
-                    // rubrics (any rubric with workflow/compliance and efficiency sections).
-                    const isWorkflow = (text: string) =>
-                        /workflow|compliance|mandatory|step.*order|before.*attempt|follow.*step/i.test(text);
-                    const isEfficiency = (text: string) =>
-                        /efficien|redundan|trial.and.error|reasonable.*command|unnecessary/i.test(text);
+                    // Classify criteria by rubric section header (set by grade()).
+                    // Falls back to keyword matching when section info is unavailable
+                    // (e.g., cloud providers calling parseResponse without grade()).
+                    const sectionOf = (criterion: string): string => {
+                        // Exact match first
+                        const exact = this.criteriaSections.get(criterion);
+
+                        if (exact) {
+                            return exact;
+                        }
+
+                        // Fuzzy match: LLM may paraphrase or truncate criterion text.
+                        // Find the rubric criterion whose first 40 chars best overlap.
+                        const needle = criterion.toLowerCase().substring(0, 40);
+
+                        for (const [rubricCriterion, section] of this.criteriaSections) {
+                            if (rubricCriterion.toLowerCase().substring(0, 40) === needle) {
+                                return section;
+                            }
+                        }
+
+                        return '';
+                    };
+
+                    const isWorkflow = (criterion: string) => {
+                        const section = sectionOf(criterion);
+
+                        if (section) {
+                            return /workflow|compliance/i.test(section);
+                        }
+
+                        return /workflow|compliance|mandatory/i.test(criterion);
+                    };
+
+                    const isEfficiency = (criterion: string) => {
+                        const section = sectionOf(criterion);
+
+                        if (section) {
+                            return /efficien/i.test(section);
+                        }
+
+                        return /efficien|redundan|trial.and.error|reasonable.*command|unnecessary/i.test(criterion);
+                    };
 
                     // Technique A (prerequisite gating): If < 50% of workflow criteria are met,
                     // efficiency criteria are vacuously true — override to false.
