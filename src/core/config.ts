@@ -78,7 +78,7 @@ function validateConfig(raw: any): EvalConfig {
             throw new Error(`Task "${t.name}" must have at least one grader`);
         }
 
-        const workspace: WorkspaceMapping[] = (t.workspace || []).map((w: any) => {
+        const workspace: WorkspaceMapping[] = (t.workspace || t.files || []).map((w: any) => {
             if (typeof w === 'string') {
                 // Support shorthand: "fixtures/app.js" → same filename in workspace
                 return { src: w, dest: path.basename(w) };

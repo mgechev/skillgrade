@@ -43,7 +43,7 @@ export async function runInit(dir: string) {
       const key = trimmed.substring(0, eqIdx).trim();
       let value = trimmed.substring(eqIdx + 1).trim();
       if ((value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))) {
+        (value.startsWith("'") && value.endsWith("'"))) {
         value = value.slice(1, -1);
       }
       if (!process.env[key]) {
@@ -153,6 +153,12 @@ IMPORTANT GRADING RULES:
 - The "checks" array is optional but recommended for per-check breakdown.
 - For workspace files, only reference files that exist in the skill directory or that the agent will create.
 
+CRITICAL — FILENAME CONSISTENCY:
+- The instruction MUST tell the agent exactly what filenames to create (e.g., "Save the result as output.txt").
+- The deterministic grader MUST only check for filenames that are explicitly mentioned in the instruction.
+- NEVER check for a hardcoded filename that the instruction does not mention — the agent will choose its own names and the grader will fail.
+- Example: if the grader checks for "output.html", the instruction must say "Save the HTML file as output.html".
+
 ${skillSummaries}
 
 Respond with ONLY the eval.yaml content. Use this exact format:
@@ -172,6 +178,13 @@ tasks:
   - name: <descriptive-task-name>
     instruction: |
       <realistic user instruction>
+      Save <expected output> as <exact-filename>.
+    workspace:
+      # Files to copy into the agent's workspace (optional).
+      # Use string shorthand or src/dest objects:
+      # - fixtures/app.js                    # copies as app.js
+      # - src: templates/viewer.html
+      #   dest: templates/viewer.html
     graders:
       - type: deterministic
         run: |
@@ -199,7 +212,7 @@ tasks:
           <evaluation criteria>
         weight: 0.3`;
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
