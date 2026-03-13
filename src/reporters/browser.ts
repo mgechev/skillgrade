@@ -41,7 +41,8 @@ export async function runBrowserPreview(resultsDir: string, port: number = 3847)
     server.listen(port, () => {
         const addr = server.address() as any;
         const actualPort = typeof addr === 'object' ? addr.port : port;
-        console.log(`📊 Skill Eval Viewer → http://localhost:${actualPort}`);
-        console.log(`   Serving from: ${resolved}`);
+        console.log(`\nskillgrade preview`);
+        console.log(`\n  url       http://localhost:${actualPort}`);
+        console.log(`  results   ${resolved}\n`);
     });
 }

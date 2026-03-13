@@ -4,7 +4,7 @@ The easiest way to evaluate your [Agent Skills](https://agentskills.io/home). Te
 
 See [examples/](examples/) — [superlint](examples/superlint/) (simple) and [angular-modern](examples/angular-modern/) (TypeScript grader).
 
-![CLI Preview](https://raw.githubusercontent.com/mgechev/skillgrade/main/assets/cli-preview.png)
+![Browser Preview](https://raw.githubusercontent.com/mgechev/skillgrade/main/assets/browser-preview.png)
 
 ## Quick Start
 
