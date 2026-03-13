@@ -174,12 +174,22 @@ export class LLMGrader implements Grader {
             sections.push(`## Task Instruction\n${instructionEntry.instruction}`);
         }
 
-        // Include all commands and their output
-        const commandEntries = sessionLog.filter(e => e.type === 'command');
+        // Include agent commands, filtering out infrastructure setup.
+        // Setup commands (base64 config injection, git init, container detection)
+        // bloat the transcript and confuse the grader — it extracts them as
+        // commands_found and exhausts num_predict before reaching criteria.
+        const setupPattern = /^(cat \/proc|echo '([A-Za-z0-9+/=]{20,})'|base64\b|git init|pwd$)/;
+        const commandEntries = sessionLog
+            .filter((e: any) => e.type === 'command' && !setupPattern.test(e.command));
+
         if (commandEntries.length > 0) {
-            const cmds = commandEntries.map(e =>
-                `$ ${e.command}\n${e.stdout || ''}${e.stderr ? '\nSTDERR: ' + e.stderr : ''}\n[exit code: ${e.exitCode ?? 'unknown'}]`
-            ).join('\n\n');
+            const cmds = commandEntries.map((e: any) => {
+                // Truncate long stdout/stderr (e.g., opencode run stderr with ANSI codes)
+                const stdout = (e.stdout || '').substring(0, 500);
+                const stderr = (e.stderr || '').substring(0, 500);
+
+                return `$ ${e.command}\n${stdout}${stderr ? '\nSTDERR: ' + stderr : ''}\n[exit code: ${e.exitCode ?? 'unknown'}]`;
+            }).join('\n\n');
             sections.push(`## Commands Executed\n${cmds}`);
         }
 
