@@ -4,33 +4,12 @@ export interface CommandResult {
     exitCode: number;
 }
 
-export interface TaskMetadata {
-    author_name: string;
-    author_email: string;
-    difficulty: string;
-    category: string;
-    tags: string[];
-}
-
 export interface GraderConfig {
     type: 'deterministic' | 'llm_rubric';
-    command?: string;         // for deterministic
-    rubric?: string;          // for llm_rubric — path relative to task dir
+    command?: string;         // for deterministic (inline script content)
+    rubric?: string;          // for llm_rubric (inline rubric content)
     model?: string;           // for llm_rubric
     weight: number;
-}
-
-export interface TaskConfig {
-    version: string;
-    metadata: TaskMetadata;
-    graders: GraderConfig[];
-    agent: { timeout_sec: number };
-    environment: {
-        build_timeout_sec: number;
-        cpus: number;
-        memory_mb: number;
-        storage_mb: number;
-    };
 }
 
 export interface GraderResult {
@@ -81,14 +60,23 @@ export abstract class BaseAgent {
     ): Promise<string>;
 }
 
+/** Options passed to environment providers for setup */
+export interface EnvironmentSetupOpts {
+    timeoutSec: number;
+    environment: {
+        cpus: number;
+        memory_mb: number;
+    };
+}
+
 export interface EnvironmentProvider {
-    /** One-time setup: build image, inject skills. Returns a reusable handle (e.g., image name). */
-    prepare?(taskPath: string, skillsPaths: string[], taskConfig: TaskConfig, env?: Record<string, string>): Promise<string>;
-    /** Per-trial setup: create isolated workspace from prepared handle. */
-    setup(taskPath: string, skillsPaths: string[], taskConfig: TaskConfig, env?: Record<string, string>): Promise<string>;
-    /** Per-trial cleanup: remove workspace. */
+    /** One-time setup: build image, inject skills. Returns reusable handle. */
+    prepare?(taskPath: string, skillsPaths: string[], opts: EnvironmentSetupOpts, env?: Record<string, string>): Promise<string>;
+    /** Per-trial setup: create isolated workspace. */
+    setup(taskPath: string, skillsPaths: string[], opts: EnvironmentSetupOpts, env?: Record<string, string>): Promise<string>;
+    /** Per-trial cleanup. */
     cleanup(workspacePath: string): Promise<void>;
-    /** One-time teardown: remove shared resources (e.g., Docker image). */
+    /** One-time teardown. */
     teardown?(): Promise<void>;
     runCommand(workspacePath: string, command: string, env?: Record<string, string>): Promise<CommandResult>;
     diagnose?(workspacePath: string): Promise<string>;

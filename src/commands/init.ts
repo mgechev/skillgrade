@@ -8,13 +8,18 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { detectSkills } from '../core/skills';
+import { parseEnvFile } from '../utils/env';
 
-export async function runInit(dir: string) {
+export async function runInit(dir: string, opts: { force?: boolean } = {}) {
   const evalPath = path.join(dir, 'eval.yaml');
 
   if (await fs.pathExists(evalPath)) {
-    console.error('  eval.yaml already exists. Delete it first to re-scaffold.');
-    process.exit(1);
+    if (opts.force) {
+      await fs.remove(evalPath);
+    } else {
+      console.error('  eval.yaml already exists. Use --force to overwrite.');
+      process.exit(1);
+    }
   }
 
   console.log('\n  📝 Initializing eval.yaml...\n');
@@ -34,18 +39,8 @@ export async function runInit(dir: string) {
   // Load .env file if present
   const envPath = path.join(dir, '.env');
   if (await fs.pathExists(envPath)) {
-    const content = await fs.readFile(envPath, 'utf-8');
-    for (const line of content.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) continue;
-      const eqIdx = trimmed.indexOf('=');
-      if (eqIdx === -1) continue;
-      const key = trimmed.substring(0, eqIdx).trim();
-      let value = trimmed.substring(eqIdx + 1).trim();
-      if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
-        value = value.slice(1, -1);
-      }
+    const envVars = parseEnvFile(await fs.readFile(envPath, 'utf-8'));
+    for (const [key, value] of Object.entries(envVars)) {
       if (!process.env[key]) {
         process.env[key] = value;
       }

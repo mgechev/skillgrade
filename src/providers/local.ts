@@ -1,10 +1,10 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { spawn } from 'child_process';
-import { EnvironmentProvider, CommandResult, TaskConfig } from '../types';
+import { EnvironmentProvider, EnvironmentSetupOpts, CommandResult } from '../types';
 
 export class LocalProvider implements EnvironmentProvider {
-    async setup(taskPath: string, skillsPaths: string[], _taskConfig: TaskConfig, env?: Record<string, string>): Promise<string> {
+    async setup(taskPath: string, skillsPaths: string[], _opts: EnvironmentSetupOpts, env?: Record<string, string>): Promise<string> {
         const tempDir = path.join('/tmp', `skilleval-${Math.random().toString(36).substring(7)}`);
         await fs.ensureDir(tempDir);
         await fs.copy(taskPath, tempDir);

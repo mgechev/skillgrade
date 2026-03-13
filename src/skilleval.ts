@@ -45,7 +45,7 @@ async function main() {
     }
 
     if (command === 'init') {
-        await runInit(cwd);
+        await runInit(cwd, { force: hasFlag('force') });
         return;
     }
 

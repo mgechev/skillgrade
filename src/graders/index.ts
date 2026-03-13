@@ -1,4 +1,4 @@
-import { GraderConfig, GraderResult, CommandResult, EnvironmentProvider } from '../types';
+import { GraderConfig, GraderResult, EnvironmentProvider } from '../types';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 

@@ -6,7 +6,7 @@
 #   skilleval --validate   Verify graders using reference solutions
 #   skilleval --preview    Open web UI for results
 #
-# Documentation: https://github.com/nickcmiller/skilleval#readme
+# Documentation: https://github.com/mgechev/skilleval#readme
 
 version: "1"
 

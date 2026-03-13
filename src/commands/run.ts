@@ -1,8 +1,7 @@
 /**
  * `skilleval` (run) command.
  *
- * Reads eval.yaml, resolves tasks, and executes evals using the existing
- * EvalRunner infrastructure.
+ * Reads eval.yaml, resolves tasks, and executes evals.
  */
 import * as fs from 'fs-extra';
 import * as path from 'path';
@@ -10,11 +9,12 @@ import { loadEvalConfig, resolveTask } from '../core/config';
 import { detectSkills } from '../core/skills';
 import { DockerProvider } from '../providers/docker';
 import { LocalProvider } from '../providers/local';
-import { EvalRunner } from '../evalRunner';
+import { EvalRunner, EvalRunOptions } from '../evalRunner';
 import { GeminiAgent } from '../agents/gemini';
 import { ClaudeAgent } from '../agents/claude';
-import { BaseAgent, TaskConfig, EvalReport } from '../types';
+import { BaseAgent, EvalReport } from '../types';
 import { ResolvedTask } from '../core/config.types';
+import { parseEnvFile } from '../utils/env';
 
 interface RunOptions {
     task?: string;       // run specific task by name
@@ -27,27 +27,6 @@ interface RunOptions {
     agent?: string;      // override agent (gemini|claude)
     provider?: string;   // override provider (docker|local)
     output?: string;     // output directory for reports and temp files
-}
-
-/**
- * Parse .env file content into key-value pairs.
- */
-function parseEnvFile(content: string): Record<string, string> {
-    const env: Record<string, string> = {};
-    for (const line of content.split('\n')) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) continue;
-        const eqIdx = trimmed.indexOf('=');
-        if (eqIdx === -1) continue;
-        const key = trimmed.substring(0, eqIdx).trim();
-        let value = trimmed.substring(eqIdx + 1).trim();
-        if ((value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'"))) {
-            value = value.slice(1, -1);
-        }
-        env[key] = value;
-    }
-    return env;
 }
 
 async function loadEnvFile(filePath: string): Promise<Record<string, string>> {
@@ -71,15 +50,12 @@ export async function runEvals(dir: string, opts: RunOptions) {
         console.log(`  Loaded .env: ${Object.keys(rootEnv).join(', ')}`);
     }
 
-    // Detect skills — use explicit path from eval.yaml, or auto-detect
-    // The skill path can point to a directory (containing SKILL.md) or to SKILL.md directly.
-    // The entire directory (scripts, references, etc.) is copied into the Docker container.
+    // Detect skills
     let skillsPaths: string[] = [];
     if (config.skill) {
         let skillDir = path.resolve(dir, config.skill);
         const stat = await fs.stat(skillDir).catch(() => null);
         if (stat?.isFile()) {
-            // If pointing to a file (e.g. SKILL.md), use its parent directory
             skillDir = path.dirname(skillDir);
         }
         if (stat && await fs.pathExists(skillDir)) {
@@ -107,7 +83,7 @@ export async function runEvals(dir: string, opts: RunOptions) {
         }
     }
 
-    // Output directory — uses OS temp by default, overridden by --output
+    // Output directory
     const outputBase = opts.output || path.join(require('os').tmpdir(), 'skilleval');
     const skillName = path.basename(dir);
     const outputDir = path.join(outputBase, skillName);
@@ -125,15 +101,30 @@ export async function runEvals(dir: string, opts: RunOptions) {
         const trials = opts.trials ?? resolved.trials;
         const parallel = opts.parallel ?? 1;
 
-        // Convert resolved task to a TaskConfig for the existing evalRunner
-        const taskConfig = resolvedToTaskConfig(resolved);
-
-        // Create a temp task directory that mirrors what evalRunner expects
+        // Create a temp task directory for Docker builds
         const tmpTaskDir = path.join(outputDir, 'tmp', resolved.name);
         await prepareTempTaskDir(resolved, dir, tmpTaskDir);
 
-        // Apply CLI overrides
-        const agentName = opts.agent || resolved.agent;
+        // Build eval options — pass resolved content directly
+        const evalOpts: EvalRunOptions = {
+            instruction: resolved.instruction,
+            graders: resolved.graders,
+            timeoutSec: resolved.timeout,
+            environment: {
+                cpus: 2,
+                memory_mb: 2048,
+            },
+        };
+
+        // Pick agent: CLI flag > task-level override > auto-detect from API key > default
+        let agentName = opts.agent || resolved.agent;
+        if (!opts.agent && !taskDef.agent) {
+            if (env.ANTHROPIC_API_KEY && !env.GEMINI_API_KEY) {
+                agentName = 'claude';
+            } else if (env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY) {
+                agentName = 'gemini';
+            }
+        }
         const providerName = opts.provider || resolved.provider;
 
         // Pick provider
@@ -159,7 +150,7 @@ export async function runEvals(dir: string, opts: RunOptions) {
                 }
             } as BaseAgent;
 
-            const report = await runner.runEval(solveAgent, tmpTaskDir, skillsPaths, 1, env);
+            const report = await runner.runEval(solveAgent, tmpTaskDir, skillsPaths, evalOpts, 1, env);
             const passed = report.trials[0].reward >= 0.5;
 
             console.table(report.trials[0].grader_results.map(gr => ({
@@ -181,7 +172,7 @@ export async function runEvals(dir: string, opts: RunOptions) {
             console.log(`\n  🚀 ${resolved.name} | agent=${agentName} provider=${providerName} trials=${trials}${parallel > 1 ? ` parallel=${parallel}` : ''}\n`);
 
             try {
-                const report = await runner.runEval(agent, tmpTaskDir, skillsPaths, trials, env, parallel);
+                const report = await runner.runEval(agent, tmpTaskDir, skillsPaths, evalOpts, trials, env, parallel);
                 reports.push(report);
 
                 // Per-trial summary
@@ -201,7 +192,7 @@ export async function runEvals(dir: string, opts: RunOptions) {
                     }
                 }
 
-                // Summary — highlight the key metric for the preset
+                // Summary
                 const presetLabel = opts.preset === 'smoke' ? ' (smoke test)'
                     : opts.preset === 'reliable' ? ' (reliable pass rate)'
                         : opts.preset === 'regression' ? ' (regression check)'
@@ -236,87 +227,30 @@ export async function runEvals(dir: string, opts: RunOptions) {
 }
 
 /**
- * Convert ResolvedTask to the legacy TaskConfig format that evalRunner expects.
- */
-function resolvedToTaskConfig(resolved: ResolvedTask): TaskConfig {
-    return {
-        version: '1',
-        metadata: {
-            author_name: '',
-            author_email: '',
-            difficulty: 'medium',
-            category: 'skilleval',
-            tags: [],
-        },
-        graders: resolved.graders.map(g => ({
-            type: g.type,
-            command: g.type === 'deterministic' ? 'bash tests/test.sh' : undefined,
-            rubric: g.type === 'llm_rubric' ? 'prompts/quality.md' : undefined,
-            model: g.model,
-            weight: g.weight,
-        })),
-        agent: { timeout_sec: resolved.timeout },
-        environment: {
-            build_timeout_sec: 180,
-            cpus: 2,
-            memory_mb: 2048,
-            storage_mb: 500,
-        },
-    };
-}
-
-/**
- * Create a temp task directory in the legacy format that evalRunner expects.
- * Maps the eval.yaml config to the old directory structure.
+ * Create a temp task directory for Docker builds.
+ * Contains: Dockerfile, workspace files, grader scripts.
+ * No longer writes task.toml or instruction.md — those are passed directly.
  */
 async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string, tmpDir: string) {
     await fs.ensureDir(tmpDir);
 
-    // Write instruction
-    await fs.writeFile(path.join(tmpDir, 'instruction.md'), resolved.instruction);
-
-    // Write task.toml
-    const tomlContent = `version = "1.0"
-
-[agent]
-timeout_sec = ${resolved.timeout}
-
-[environment]
-build_timeout_sec = 180
-cpus = 2
-memory_mb = 2048
-storage_mb = 500
-
-${resolved.graders.map(g => {
-        if (g.type === 'deterministic') {
-            return `[[graders]]\ntype = "deterministic"\ncommand = "bash tests/test.sh"\nweight = ${g.weight}`;
-        } else {
-            return `[[graders]]\ntype = "llm_rubric"\nrubric = "prompts/quality.md"\nweight = ${g.weight}`;
-        }
-    }).join('\n\n')}
-`;
-    await fs.writeFile(path.join(tmpDir, 'task.toml'), tomlContent);
-
-    // Write deterministic grader scripts
+    // Write each deterministic grader script
     await fs.ensureDir(path.join(tmpDir, 'tests'));
     const detGraders = resolved.graders.filter(g => g.type === 'deterministic');
-    if (detGraders.length > 0 && detGraders[0].run) {
-        // The grader script must output JSON: { "score": 0-1, "details": "..." }
-        const script = `#!/bin/bash
-# Run the grader check
-${detGraders[0].run.trim()}
-`;
-        await fs.writeFile(path.join(tmpDir, 'tests', 'test.sh'), script);
+    for (let i = 0; i < detGraders.length; i++) {
+        if (detGraders[i].run) {
+            const script = `#!/bin/bash\n${detGraders[i].run!.trim()}\n`;
+            const filename = i === 0 ? 'test.sh' : `test_${i}.sh`;
+            await fs.writeFile(path.join(tmpDir, 'tests', filename), script);
+        }
     }
 
-    // Copy referenced grader files/directories into the temp dir
-    // Look for file references in grader run commands (e.g., "graders/check.ts")
+    // Copy referenced grader files/directories
     for (const g of resolved.graders) {
         if (g.type === 'deterministic' && g.run) {
-            // Extract potential file paths from the run command
             const pathMatches = g.run.match(/[\w./-]+\.\w{1,4}/g) || [];
             for (const ref of pathMatches) {
-                const refDir = ref.split('/')[0]; // e.g., "graders" from "graders/check.ts"
+                const refDir = ref.split('/')[0];
                 const srcDir = path.resolve(baseDir, refDir);
                 const destDir = path.join(tmpDir, refDir);
                 if (refDir !== ref && await fs.pathExists(srcDir) && !await fs.pathExists(destDir)) {
@@ -326,20 +260,25 @@ ${detGraders[0].run.trim()}
         }
     }
 
-    // Write LLM rubric
+    // Write each LLM rubric
     await fs.ensureDir(path.join(tmpDir, 'prompts'));
     const llmGraders = resolved.graders.filter(g => g.type === 'llm_rubric');
-    if (llmGraders.length > 0 && llmGraders[0].rubric) {
-        await fs.writeFile(path.join(tmpDir, 'prompts', 'quality.md'), llmGraders[0].rubric);
+    for (let i = 0; i < llmGraders.length; i++) {
+        if (llmGraders[i].rubric) {
+            const filename = i === 0 ? 'quality.md' : `quality_${i}.md`;
+            await fs.writeFile(path.join(tmpDir, 'prompts', filename), llmGraders[i].rubric!);
+        }
     }
 
     // Write Dockerfile
     await fs.ensureDir(path.join(tmpDir, 'environment'));
     let dockerfileContent = `FROM ${resolved.docker.base}\n\nWORKDIR /workspace\n\n`;
 
-    // Install agent
+    // Install agent CLI
     if (resolved.agent === 'gemini') {
         dockerfileContent += `RUN npm install -g @google/gemini-cli\n\n`;
+    } else if (resolved.agent === 'claude') {
+        dockerfileContent += `RUN npm install -g @anthropic-ai/claude-code\n\n`;
     }
 
     // Docker setup commands
@@ -347,7 +286,7 @@ ${detGraders[0].run.trim()}
         dockerfileContent += `RUN ${resolved.docker.setup.trim()}\n\n`;
     }
 
-    // Grader setup commands (install grader-specific dependencies)
+    // Grader setup commands
     for (const g of resolved.graders) {
         if (g.setup) {
             dockerfileContent += `# Grader setup\nRUN ${g.setup.trim()}\n\n`;
@@ -370,4 +309,3 @@ ${detGraders[0].run.trim()}
     dockerfileContent += `\nCOPY . .\nCMD ["bash"]\n`;
     await fs.writeFile(path.join(tmpDir, 'environment', 'Dockerfile'), dockerfileContent);
 }
-

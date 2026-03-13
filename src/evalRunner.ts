@@ -1,28 +1,11 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import * as toml from 'toml';
 import {
-    BaseAgent, EnvironmentProvider, TaskConfig, GraderConfig,
+    BaseAgent, EnvironmentProvider,
     LogEntry, TrialResult, EvalReport, GraderResult
 } from './types';
+import { ResolvedGrader } from './core/config.types';
 import { getGrader } from './graders';
-
-export async function loadTaskConfig(taskPath: string): Promise<TaskConfig> {
-    const configPath = path.join(taskPath, 'task.toml');
-    const content = await fs.readFile(configPath, 'utf-8');
-    const raw = toml.parse(content);
-
-    // Normalize: support both old [verifier] format and new [[graders]] format
-    if (!raw.graders && raw.verifier) {
-        raw.graders = [{
-            type: 'deterministic',
-            command: 'bash tests/test.sh',
-            weight: 1.0
-        }];
-    }
-
-    return raw;
-}
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -40,7 +23,6 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
 /**
  * Calculate pass@k: probability of at least 1 success in k trials
  * Using unbiased estimator: 1 - C(n-c, k) / C(n, k)
- * where n = total trials, c = successes, k = attempts
  */
 function calculatePassAtK(n: number, c: number, k: number): number {
     if (n - c < k) return 1.0;
@@ -53,16 +35,26 @@ function calculatePassAtK(n: number, c: number, k: number): number {
 
 /**
  * Calculate pass^k: probability that all k trials succeed
- * Estimated as (c/n)^k
  */
 function calculatePassPowK(n: number, c: number, k: number): number {
     const p = c / n;
     return Math.pow(p, k);
 }
 
-/** Estimate token count from text (~4 chars per token, standard GPT heuristic) */
+/** Estimate token count from text (~4 chars per token) */
 function estimateTokens(text: string): number {
     return Math.ceil(text.length / 4);
+}
+
+/** Options for running an eval */
+export interface EvalRunOptions {
+    instruction: string;
+    graders: ResolvedGrader[];
+    timeoutSec: number;
+    environment: {
+        cpus: number;
+        memory_mb: number;
+    };
 }
 
 export class EvalRunner {
@@ -81,41 +73,40 @@ export class EvalRunner {
     async runEval(
         agent: BaseAgent,
         taskPath: string,
-        skillsPaths: string[] = [],
+        skillsPaths: string[],
+        opts: EvalRunOptions,
         numTrials: number = 1,
         env?: Record<string, string>,
         parallel: number = 1
     ): Promise<EvalReport> {
-        const taskConfig = await loadTaskConfig(taskPath);
         const taskName = path.basename(taskPath);
         console.log(`Starting eval for task: ${taskName} (${numTrials} trials${parallel > 1 ? `, ${parallel} parallel` : ''})`);
 
         // One-time image build (if provider supports it)
         if (this.provider.prepare) {
-            await this.provider.prepare(taskPath, skillsPaths, taskConfig, env);
+            await this.provider.prepare(taskPath, skillsPaths, opts, env);
         }
 
         let trials: TrialResult[];
 
         try {
             if (parallel > 1 && numTrials > 1) {
-                trials = await this.runTrialsParallel(agent, taskPath, taskConfig, skillsPaths, numTrials, parallel, env);
+                trials = await this.runTrialsParallel(agent, taskPath, skillsPaths, opts, numTrials, parallel, env);
             } else {
                 trials = [];
                 for (let i = 0; i < numTrials; i++) {
-                    const result = await this.runSingleTrial(agent, taskPath, taskConfig, skillsPaths, i, numTrials, env);
+                    const result = await this.runSingleTrial(agent, taskPath, skillsPaths, opts, i, numTrials, env);
                     trials.push(result);
                 }
             }
         } finally {
-            // One-time image cleanup
             if (this.provider.teardown) {
                 await this.provider.teardown();
             }
         }
 
         const totalReward = trials.reduce((sum, t) => sum + t.reward, 0);
-        const successes = trials.filter(t => t.reward >= 0.5).length; // threshold for "pass"
+        const successes = trials.filter(t => t.reward >= 0.5).length;
 
         const report: EvalReport = {
             task: taskName,
@@ -127,8 +118,8 @@ export class EvalRunner {
         };
 
         if (this.logDir) {
-            const sanitizedReport = this.sanitize(report, env);
-            await this.saveReport(sanitizedReport);
+            const sanitized = this.sanitize(report, env);
+            await this.saveReport(sanitized);
         }
 
         return report;
@@ -137,8 +128,8 @@ export class EvalRunner {
     private async runTrialsParallel(
         agent: BaseAgent,
         taskPath: string,
-        taskConfig: TaskConfig,
         skillsPaths: string[],
+        opts: EvalRunOptions,
         numTrials: number,
         parallel: number,
         env?: Record<string, string>
@@ -149,7 +140,7 @@ export class EvalRunner {
         const workers = Array.from({ length: Math.min(parallel, numTrials) }, async () => {
             while (queue.length > 0) {
                 const i = queue.shift()!;
-                results[i] = await this.runSingleTrial(agent, taskPath, taskConfig, skillsPaths, i, numTrials, env);
+                results[i] = await this.runSingleTrial(agent, taskPath, skillsPaths, opts, i, numTrials, env);
             }
         });
 
@@ -160,8 +151,8 @@ export class EvalRunner {
     private async runSingleTrial(
         agent: BaseAgent,
         taskPath: string,
-        taskConfig: TaskConfig,
         skillsPaths: string[],
+        opts: EvalRunOptions,
         index: number,
         total: number,
         env?: Record<string, string>
@@ -171,10 +162,10 @@ export class EvalRunner {
         const startTime = Date.now();
 
         process.stdout.write(`  Trial ${index + 1}/${total} `);
-        const workspace = await this.provider.setup(taskPath, skillsPaths, taskConfig, env);
+        const workspace = await this.provider.setup(taskPath, skillsPaths, opts, env);
 
         try {
-            const instruction = await fs.readFile(path.join(taskPath, 'instruction.md'), 'utf-8');
+            const instruction = opts.instruction;
 
             sessionLog.push({
                 type: 'agent_start',
@@ -197,11 +188,11 @@ export class EvalRunner {
                 return result;
             };
 
-            const agentTimeoutMs = taskConfig.agent.timeout_sec * 1000;
+            const agentTimeoutMs = opts.timeoutSec * 1000;
             const agentLogs = await withTimeout(
                 agent.run(instruction, workspace, loggedRunCommand),
                 agentTimeoutMs,
-                `Agent (limit: ${taskConfig.agent.timeout_sec}s)`
+                `Agent (limit: ${opts.timeoutSec}s)`
             );
 
             sessionLog.push({
@@ -213,8 +204,25 @@ export class EvalRunner {
             // Run all graders
             const graderResults: GraderResult[] = [];
 
-            for (const graderConfig of taskConfig.graders) {
-                const grader = getGrader(graderConfig.type);
+            for (let gIdx = 0; gIdx < opts.graders.length; gIdx++) {
+                const graderDef = opts.graders[gIdx];
+                const grader = getGrader(graderDef.type);
+
+                // Build grader config with file references for execution
+                const detIndex = opts.graders.slice(0, gIdx).filter(g => g.type === 'deterministic').length;
+                const llmIndex = opts.graders.slice(0, gIdx).filter(g => g.type === 'llm_rubric').length;
+
+                const graderConfig = {
+                    type: graderDef.type,
+                    command: graderDef.type === 'deterministic'
+                        ? `bash tests/${detIndex === 0 ? 'test.sh' : `test_${detIndex}.sh`}`
+                        : undefined,
+                    rubric: graderDef.type === 'llm_rubric'
+                        ? `prompts/${llmIndex === 0 ? 'quality.md' : `quality_${llmIndex}.md`}`
+                        : undefined,
+                    model: graderDef.model,
+                    weight: graderDef.weight,
+                };
                 const result = await grader.grade(workspace, this.provider, graderConfig, taskPath, sessionLog, env);
                 graderResults.push(result);
 
@@ -239,7 +247,6 @@ export class EvalRunner {
 
             const duration_ms = Date.now() - startTime;
 
-            // Estimate tokens from session log
             const input_tokens = estimateTokens(instruction);
             const output_tokens = sessionLog
                 .filter(e => e.type === 'agent_result' || e.type === 'command')
@@ -263,7 +270,6 @@ export class EvalRunner {
             const errorMsg = err?.message || String(err);
             console.log(`✗ FAILED: ${errorMsg} (${(duration_ms / 1000).toFixed(1)}s)`);
 
-            // Capture diagnostics before cleanup (only useful for Docker)
             let diagnostics = '';
             if (this.provider.diagnose) {
                 try {

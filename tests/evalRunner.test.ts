@@ -8,82 +8,33 @@ vi.mock('fs-extra', () => ({
   writeJSON: vi.fn(),
 }));
 
-vi.mock('toml', () => ({
-  parse: vi.fn(),
-}));
-
 vi.mock('./graders', () => ({
   getGrader: vi.fn(),
 }));
 
 import * as fs from 'fs-extra';
-import * as toml from 'toml';
-import { loadTaskConfig, EvalRunner } from '../src/evalRunner';
-import { BaseAgent, EnvironmentProvider, CommandResult, GraderResult } from '../src/types';
+import { EvalRunner, EvalRunOptions } from '../src/evalRunner';
+import { BaseAgent, EnvironmentProvider, GraderResult } from '../src/types';
 
-const mockReadFile = vi.mocked(fs.readFile);
 const mockEnsureDir = vi.mocked(fs.ensureDir);
 const mockWriteJSON = vi.mocked(fs.writeJSON);
-const mockTomlParse = vi.mocked(toml.parse);
+
+/** Standard eval options used across tests */
+function makeEvalOpts(overrides?: Partial<EvalRunOptions>): EvalRunOptions {
+  return {
+    instruction: 'Do something',
+    graders: [{ type: 'deterministic', run: 'echo ok', weight: 1.0 }],
+    timeoutSec: 300,
+    environment: { cpus: 2, memory_mb: 2048 },
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
-  // Suppress console output during tests
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-});
-
-describe('loadTaskConfig', () => {
-  it('loads and parses task.toml', async () => {
-    const config = {
-      version: '1.0',
-      graders: [{ type: 'deterministic', command: 'bash tests/test.sh', weight: 1.0 }],
-      agent: { timeout_sec: 300 },
-      environment: { cpus: 2, memory_mb: 2048 },
-    };
-
-    mockReadFile.mockResolvedValue('content' as any);
-    mockTomlParse.mockReturnValue(config);
-
-    const result = await loadTaskConfig('/task');
-    expect(result.graders).toHaveLength(1);
-    expect(result.graders[0].type).toBe('deterministic');
-  });
-
-  it('normalizes legacy [verifier] format to graders', async () => {
-    const config = {
-      version: '1.0',
-      verifier: { script: 'test.sh' },
-      agent: { timeout_sec: 300 },
-    };
-
-    mockReadFile.mockResolvedValue('content' as any);
-    mockTomlParse.mockReturnValue(config);
-
-    const result = await loadTaskConfig('/task');
-    expect(result.graders).toHaveLength(1);
-    expect(result.graders[0].type).toBe('deterministic');
-    expect(result.graders[0].command).toBe('bash tests/test.sh');
-  });
-
-  it('keeps new graders format as-is', async () => {
-    const config = {
-      version: '1.0',
-      graders: [
-        { type: 'deterministic', command: 'node test.js', weight: 0.7 },
-        { type: 'llm_rubric', rubric: 'quality.md', weight: 0.3 },
-      ],
-      agent: { timeout_sec: 300 },
-    };
-
-    mockReadFile.mockResolvedValue('content' as any);
-    mockTomlParse.mockReturnValue(config);
-
-    const result = await loadTaskConfig('/task');
-    expect(result.graders).toHaveLength(2);
-    expect(result.graders[1].type).toBe('llm_rubric');
-  });
 });
 
 describe('EvalRunner', () => {
@@ -103,32 +54,11 @@ describe('EvalRunner', () => {
     } as any;
   }
 
-  // We need to mock the dependencies that EvalRunner uses
-  // The key ones are: loadTaskConfig (called within runEval) and getGrader
-
   it('runs a single trial and returns report', async () => {
     const provider = makeMockProvider();
     const agent = makeMockAgent();
+    const opts = makeEvalOpts();
 
-    // Mock fs.readFile for task.toml and instruction.md
-    mockReadFile.mockImplementation(async (filePath: any) => {
-      const p = String(filePath);
-      if (p.endsWith('task.toml')) return 'toml content' as any;
-      if (p.endsWith('instruction.md')) return 'Do something' as any;
-      return '' as any;
-    });
-
-    mockTomlParse.mockReturnValue({
-      graders: [{
-        type: 'deterministic',
-        command: 'echo ok',
-        weight: 1.0,
-      }],
-      agent: { timeout_sec: 300 },
-      environment: { cpus: 2, memory_mb: 2048, storage_mb: 500, build_timeout_sec: 180 },
-    });
-
-    // Mock the grader
     const mockGrader = {
       grade: vi.fn().mockResolvedValue({
         grader_type: 'deterministic',
@@ -138,12 +68,11 @@ describe('EvalRunner', () => {
       } as GraderResult),
     };
 
-    // We need to mock getGrader which is imported in evalRunner
     const gradersModule = await import('../src/graders/index');
     vi.spyOn(gradersModule, 'getGrader').mockReturnValue(mockGrader);
 
     const runner = new EvalRunner(provider);
-    const report = await runner.runEval(agent, '/task', [], 1);
+    const report = await runner.runEval(agent, '/task', [], opts, 1);
 
     expect(report.task).toBe('task');
     expect(report.trials).toHaveLength(1);
@@ -162,21 +91,8 @@ describe('EvalRunner', () => {
       run: vi.fn().mockRejectedValue(new Error('Agent crashed')),
     } as any as BaseAgent;
 
-    mockReadFile.mockImplementation(async (filePath: any) => {
-      const p = String(filePath);
-      if (p.endsWith('task.toml')) return 'toml content' as any;
-      if (p.endsWith('instruction.md')) return 'Do something' as any;
-      return '' as any;
-    });
-
-    mockTomlParse.mockReturnValue({
-      graders: [{ type: 'deterministic', command: 'echo ok', weight: 1.0 }],
-      agent: { timeout_sec: 300 },
-      environment: { cpus: 2, memory_mb: 2048, storage_mb: 500, build_timeout_sec: 180 },
-    });
-
     const runner = new EvalRunner(provider);
-    const report = await runner.runEval(agent, '/task', [], 1);
+    const report = await runner.runEval(agent, '/task', [], makeEvalOpts(), 1);
 
     expect(report.trials[0].reward).toBe(0);
     expect(report.trials[0].grader_results).toEqual([]);
@@ -186,19 +102,6 @@ describe('EvalRunner', () => {
     const provider = makeMockProvider();
     const agent = makeMockAgent();
 
-    mockReadFile.mockImplementation(async (filePath: any) => {
-      const p = String(filePath);
-      if (p.endsWith('task.toml')) return 'toml content' as any;
-      if (p.endsWith('instruction.md')) return 'Do something' as any;
-      return '' as any;
-    });
-
-    mockTomlParse.mockReturnValue({
-      graders: [{ type: 'deterministic', command: 'echo ok', weight: 1.0 }],
-      agent: { timeout_sec: 300 },
-      environment: { cpus: 2, memory_mb: 2048, storage_mb: 500, build_timeout_sec: 180 },
-    });
-
     const gradersModule = await import('../src/graders/index');
     vi.spyOn(gradersModule, 'getGrader').mockReturnValue({
       grade: vi.fn().mockResolvedValue({
@@ -207,7 +110,7 @@ describe('EvalRunner', () => {
     });
 
     const runner = new EvalRunner(provider, '/logs');
-    const report = await runner.runEval(agent, '/task', [], 1);
+    await runner.runEval(agent, '/task', [], makeEvalOpts(), 1);
 
     expect(mockEnsureDir).toHaveBeenCalledWith('/logs');
     expect(mockWriteJSON).toHaveBeenCalled();
@@ -230,19 +133,6 @@ describe('EvalRunner', () => {
       }),
     } as any as BaseAgent;
 
-    mockReadFile.mockImplementation(async (filePath: any) => {
-      const p = String(filePath);
-      if (p.endsWith('task.toml')) return 'toml content' as any;
-      if (p.endsWith('instruction.md')) return 'Do something' as any;
-      return '' as any;
-    });
-
-    mockTomlParse.mockReturnValue({
-      graders: [{ type: 'deterministic', command: 'echo ok', weight: 1.0 }],
-      agent: { timeout_sec: 300 },
-      environment: { cpus: 2, memory_mb: 2048, storage_mb: 500, build_timeout_sec: 180 },
-    });
-
     const gradersModule = await import('../src/graders/index');
     vi.spyOn(gradersModule, 'getGrader').mockReturnValue({
       grade: vi.fn().mockResolvedValue({
@@ -251,7 +141,7 @@ describe('EvalRunner', () => {
     });
 
     const runner = new EvalRunner(provider, '/logs');
-    await runner.runEval(agent, '/task', [], 1, { SECRET: 'MY_SECRET_VALUE_123' });
+    await runner.runEval(agent, '/task', [], makeEvalOpts(), 1, { SECRET: 'MY_SECRET_VALUE_123' });
 
     const writtenReport = (mockWriteJSON.mock.calls[0] as any[])[1];
     const reportStr = JSON.stringify(writtenReport);
@@ -262,19 +152,6 @@ describe('EvalRunner', () => {
   it('calculates correct pass_rate and pass_at_k', async () => {
     const provider = makeMockProvider();
     const agent = makeMockAgent();
-
-    mockReadFile.mockImplementation(async (filePath: any) => {
-      const p = String(filePath);
-      if (p.endsWith('task.toml')) return 'toml content' as any;
-      if (p.endsWith('instruction.md')) return 'Do something' as any;
-      return '' as any;
-    });
-
-    mockTomlParse.mockReturnValue({
-      graders: [{ type: 'deterministic', command: 'echo ok', weight: 1.0 }],
-      agent: { timeout_sec: 300 },
-      environment: { cpus: 2, memory_mb: 2048, storage_mb: 500, build_timeout_sec: 180 },
-    });
 
     let callCount = 0;
     const gradersModule = await import('../src/graders/index');
@@ -291,7 +168,7 @@ describe('EvalRunner', () => {
     });
 
     const runner = new EvalRunner(provider);
-    const report = await runner.runEval(agent, '/task', [], 2);
+    const report = await runner.runEval(agent, '/task', [], makeEvalOpts(), 2);
 
     expect(report.trials).toHaveLength(2);
     // Trial 1 score=0, Trial 2 score=1.0
@@ -302,19 +179,6 @@ describe('EvalRunner', () => {
     const provider = makeMockProvider();
     const agent = makeMockAgent();
 
-    mockReadFile.mockImplementation(async (filePath: any) => {
-      const p = String(filePath);
-      if (p.endsWith('task.toml')) return 'toml content' as any;
-      if (p.endsWith('instruction.md')) return 'Do something' as any;
-      return '' as any;
-    });
-
-    mockTomlParse.mockReturnValue({
-      graders: [{ type: 'deterministic', command: 'echo ok', weight: 1.0 }],
-      agent: { timeout_sec: 300 },
-      environment: { cpus: 2, memory_mb: 2048, storage_mb: 500, build_timeout_sec: 180 },
-    });
-
     const gradersModule = await import('../src/graders/index');
     vi.spyOn(gradersModule, 'getGrader').mockReturnValue({
       grade: vi.fn().mockResolvedValue({
@@ -323,7 +187,7 @@ describe('EvalRunner', () => {
     });
 
     const runner = new EvalRunner(provider);
-    const report = await runner.runEval(agent, '/task', [], 3, undefined, 2);
+    const report = await runner.runEval(agent, '/task', [], makeEvalOpts(), 3, undefined, 2);
 
     expect(report.trials).toHaveLength(3);
   });
@@ -332,19 +196,6 @@ describe('EvalRunner', () => {
     const provider = makeMockProvider();
     const agent = makeMockAgent();
 
-    mockReadFile.mockImplementation(async (filePath: any) => {
-      const p = String(filePath);
-      if (p.endsWith('task.toml')) return 'toml content' as any;
-      if (p.endsWith('instruction.md')) return 'Do something' as any;
-      return '' as any;
-    });
-
-    mockTomlParse.mockReturnValue({
-      graders: [{ type: 'deterministic', command: 'echo ok', weight: 1.0 }],
-      agent: { timeout_sec: 300 },
-      environment: { cpus: 2, memory_mb: 2048, storage_mb: 500, build_timeout_sec: 180 },
-    });
-
     const gradersModule = await import('../src/graders/index');
     vi.spyOn(gradersModule, 'getGrader').mockReturnValue({
       grade: vi.fn().mockResolvedValue({
@@ -353,7 +204,7 @@ describe('EvalRunner', () => {
     });
 
     const runner = new EvalRunner(provider);
-    await runner.runEval(agent, '/task', [], 1);
+    await runner.runEval(agent, '/task', [], makeEvalOpts(), 1);
 
     expect(mockWriteJSON).not.toHaveBeenCalled();
   });
@@ -366,21 +217,8 @@ describe('EvalRunner', () => {
       run: vi.fn().mockRejectedValue(new Error('Failed')),
     } as any as BaseAgent;
 
-    mockReadFile.mockImplementation(async (filePath: any) => {
-      const p = String(filePath);
-      if (p.endsWith('task.toml')) return 'toml content' as any;
-      if (p.endsWith('instruction.md')) return 'Do something' as any;
-      return '' as any;
-    });
-
-    mockTomlParse.mockReturnValue({
-      graders: [{ type: 'deterministic', command: 'echo ok', weight: 1.0 }],
-      agent: { timeout_sec: 300 },
-      environment: { cpus: 2, memory_mb: 2048, storage_mb: 500, build_timeout_sec: 180 },
-    });
-
     const runner = new EvalRunner(provider);
-    const report = await runner.runEval(agent, '/task', [], 1);
+    const report = await runner.runEval(agent, '/task', [], makeEvalOpts(), 1);
 
     expect((provider as any).diagnose).toHaveBeenCalled();
     const lastLogEntry = report.trials[0].session_log[report.trials[0].session_log.length - 1];
@@ -396,17 +234,30 @@ describe('EvalRunner', () => {
 
     const agent = makeMockAgent();
 
-    mockReadFile.mockImplementation(async (filePath: any) => {
-      const p = String(filePath);
-      if (p.endsWith('task.toml')) return 'toml content' as any;
-      if (p.endsWith('instruction.md')) return 'Do something' as any;
-      return '' as any;
+    const gradersModule = await import('../src/graders/index');
+    vi.spyOn(gradersModule, 'getGrader').mockReturnValue({
+      grade: vi.fn().mockResolvedValue({
+        grader_type: 'deterministic', score: 1.0, weight: 1.0, details: 'ok',
+      }),
     });
 
-    mockTomlParse.mockReturnValue({
-      graders: [{ type: 'deterministic', command: 'echo ok', weight: 1.0 }],
-      agent: { timeout_sec: 300 },
-      environment: { cpus: 2, memory_mb: 2048, storage_mb: 500, build_timeout_sec: 180 },
+    const runner = new EvalRunner(provider);
+    const report = await runner.runEval(agent, '/task', [], makeEvalOpts(), 1);
+
+    expect(report.trials).toHaveLength(1);
+    // Should not throw even without prepare/teardown
+  });
+
+  it('handles multiple graders of each type', async () => {
+    const provider = makeMockProvider();
+    const agent = makeMockAgent();
+
+    const opts = makeEvalOpts({
+      graders: [
+        { type: 'deterministic', run: 'echo 1', weight: 0.5 },
+        { type: 'deterministic', run: 'echo 2', weight: 0.2 },
+        { type: 'llm_rubric', rubric: 'Evaluate quality', weight: 0.3 },
+      ],
     });
 
     const gradersModule = await import('../src/graders/index');
@@ -417,9 +268,8 @@ describe('EvalRunner', () => {
     });
 
     const runner = new EvalRunner(provider);
-    const report = await runner.runEval(agent, '/task', [], 1);
+    const report = await runner.runEval(agent, '/task', [], opts, 1);
 
-    expect(report.trials).toHaveLength(1);
-    // Should not throw even without prepare/teardown
+    expect(report.trials[0].grader_results).toHaveLength(3);
   });
 });

@@ -2,12 +2,12 @@ import Docker from 'dockerode';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as tar from 'tar-stream';
-import { EnvironmentProvider, CommandResult, TaskConfig } from '../types';
+import { EnvironmentProvider, EnvironmentSetupOpts, CommandResult } from '../types';
 
 export class DockerProvider implements EnvironmentProvider {
     private docker: Docker;
     private preparedImage?: string;
-    private taskConfig?: TaskConfig;
+    private setupOpts?: EnvironmentSetupOpts;
     private envPairs: string[] = [];
 
     constructor() {
@@ -18,8 +18,8 @@ export class DockerProvider implements EnvironmentProvider {
      * Build the image once, inject skills, commit a snapshot.
      * All subsequent setup() calls create containers from this image.
      */
-    async prepare(taskPath: string, skillsPaths: string[], taskConfig: TaskConfig, env?: Record<string, string>): Promise<string> {
-        this.taskConfig = taskConfig;
+    async prepare(taskPath: string, skillsPaths: string[], opts: EnvironmentSetupOpts, env?: Record<string, string>): Promise<string> {
+        this.setupOpts = opts;
         this.envPairs = env ? Object.entries(env).map(([k, v]) => `${k}=${v}`) : [];
 
         const safeName = path.basename(taskPath).toLowerCase().replace(/[^a-z0-9._-]/g, '-');
@@ -89,13 +89,13 @@ export class DockerProvider implements EnvironmentProvider {
      * Per-trial: create a fresh container from the prepared image.
      * This is fast — no build, no skill injection.
      */
-    async setup(taskPath: string, skillsPaths: string[], taskConfig: TaskConfig, env?: Record<string, string>): Promise<string> {
+    async setup(taskPath: string, skillsPaths: string[], opts: EnvironmentSetupOpts, env?: Record<string, string>): Promise<string> {
         // If prepare() wasn't called, fall back to building inline
         if (!this.preparedImage) {
-            await this.prepare(taskPath, skillsPaths, taskConfig, env);
+            await this.prepare(taskPath, skillsPaths, opts, env);
         }
 
-        const config = this.taskConfig || taskConfig;
+        const config = this.setupOpts || opts;
         const envPairs = this.envPairs.length > 0 ? this.envPairs
             : (env ? Object.entries(env).map(([k, v]) => `${k}=${v}`) : []);
 
