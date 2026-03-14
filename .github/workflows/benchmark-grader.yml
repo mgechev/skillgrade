@@ -1,3 +1,7 @@
+# NOTE: This workflow uses ai-action/setup-ollama@v2 directly instead of the
+# .github/actions/setup-ollama composite action. The benchmark needs multiple
+# Ollama restart profiles (default vs optimized) and dynamic comma-separated
+# model input, which conflict with the composite action's single-start approach.
 name: Benchmark Grader Models
 
 on:

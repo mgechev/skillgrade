@@ -34,6 +34,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-node
       - uses: ./.github/actions/setup-ollama
+        with:
+          models: |
+            - name: qwen2.5:3b
       - run: npm run test:bootstrap
 
   test-unit:
