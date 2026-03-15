@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: opencode + Ollama Agent Backends
-status: Phase 5.1 e2e validated (5/5 trials reward 0.96). Ready for Phase 6.
-stopped_at: Phase 6 context gathered
-last_updated: "2026-03-14T23:37:01.087Z"
-last_activity: 2026-03-13 -- Phase 5.1 e2e grader timeout resolved via grader cache in evalRunner
+status: Plan 06-01 complete. setup-ollama extended with multi-model YAML input.
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-03-15T00:00:35.133Z"
+last_activity: 2026-03-15 -- Plan 06-01 multi-model setup-ollama and CI Modelfile
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 14
-  completed_plans: 14
+  total_plans: 17
+  completed_plans: 15
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 
 ## Current Position
 
-Phase: Phase 6 (CI Integration) -- ready to plan
-Plan: 0 -- not yet planned
-Status: Phase 5.1 e2e validated (5/5 trials reward 0.96). Ready for Phase 6.
-Last activity: 2026-03-13 -- Phase 5.1 e2e grader timeout resolved via grader cache in evalRunner
+Phase: Phase 6 (CI Integration) -- Plan 01 complete
+Plan: 1 of 3 complete
+Status: Plan 06-01 complete. setup-ollama extended with multi-model YAML input.
+Last activity: 2026-03-15 -- Plan 06-01 multi-model setup-ollama and CI Modelfile
 
 ## Accumulated Context
 
@@ -67,6 +67,8 @@ Decisions logged in PROJECT.md Key Decisions table. v1.0 decisions archived to m
 - [Phase 05.1 gap]: Three scoring techniques: prerequisite gating (A), weighted scoring (C), score cap (D)
 - [Phase 05.1 gap]: think:false required for qwen3 grading -- thinking tokens break structured output
 - [Phase 05.1 e2e]: Grader cache in evalRunner (not singleton in getGrader) -- OCP-compliant for upstream fork
+- [Phase 06]: Kept benchmark-grader.yml using ai-action/setup-ollama@v2 directly due to multi-profile restart pattern
+- [Phase 06]: Used temp-file approach for YAML parsing to avoid subshell variable scoping in piped while-read
 
 ### Pending Todos
 
@@ -91,9 +93,10 @@ None.
 | 04.1 | 03 | ~180min | 4 | 12 |
 | Phase 05 P01 | 2min | 2 tasks | 5 files |
 | 05 | 02 | 2min | 2 | 3 |
+| Phase 06 P01 | 2min | 2 tasks | 5 files |
 
 ## Session Continuity
 
-Last session: 2026-03-14T23:37:01.084Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-ci-integration/06-CONTEXT.md
+Last session: 2026-03-15T00:00:35.131Z
+Stopped at: Completed 06-01-PLAN.md
+Resume file: None
