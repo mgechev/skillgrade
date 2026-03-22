@@ -10,7 +10,7 @@ export class ClaudeAgent extends BaseAgent {
         const b64 = Buffer.from(instruction).toString('base64');
         await runCommand(`echo '${b64}' | base64 -d > /tmp/.prompt.md`);
 
-        const command = `claude "$(cat /tmp/.prompt.md)" --yes --no-auto-update`;
+        const command = `claude -p --dangerously-skip-permissions "$(cat /tmp/.prompt.md)"`;
         const result = await runCommand(command);
 
         if (result.exitCode !== 0) {
