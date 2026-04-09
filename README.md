@@ -11,7 +11,7 @@ See [examples/](examples/) — [superlint](examples/superlint/) (simple) and [an
 **Prerequisites**: Node.js 20+, Docker
 
 ```bash
-npm i -g skillgrade
+npm i -g @kmonty/skillgrade
 ```
 
 **1. Initialize** — go to your skill directory (must have `SKILL.md`) and scaffold:
@@ -213,7 +213,7 @@ Use `--provider=local` in CI — the runner is already an ephemeral sandbox, so 
 ```yaml
 # .github/workflows/skillgrade.yml
 - run: |
-    npm i -g skillgrade
+    npm i -g @kmonty/skillgrade
     cd skills/superlint
     GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} skillgrade --regression --ci --provider=local
 ```
