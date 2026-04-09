@@ -98,6 +98,22 @@ describe('EvalRunner', () => {
     expect(report.trials[0].grader_results).toEqual([]);
   });
 
+  it('handles provider setup failure gracefully', async () => {
+    const provider = makeMockProvider();
+    provider.setup = vi.fn().mockRejectedValue(new Error('Setup failed'));
+
+    const agent = makeMockAgent();
+    const runner = new EvalRunner(provider);
+    
+    const report = await runner.runEval(agent, '/task', [], makeEvalOpts(), 1);
+
+    expect(report.trials).toHaveLength(1);
+    expect(report.trials[0].reward).toBe(0);
+    expect(report.trials[0].session_log.length).toBeGreaterThan(0);
+    const lastLog = report.trials[0].session_log[report.trials[0].session_log.length - 1];
+    expect(lastLog.output).toContain('Setup failed');
+  });
+
   it('saves report to logDir when provided', async () => {
     const provider = makeMockProvider();
     const agent = makeMockAgent();

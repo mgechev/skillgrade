@@ -32,7 +32,7 @@ describe('LocalProvider', () => {
         environment: { build_timeout_sec: 180, cpus: 2, memory_mb: 2048, storage_mb: 500 },
       };
 
-      const workspace = await provider.setup(taskDir, [], taskConfig);
+      const workspace = await provider.setup(taskDir, [], taskConfig as any);
       tempDirs.push(workspace);
 
       expect(workspace).toContain('skillgrade-');
@@ -56,7 +56,7 @@ describe('LocalProvider', () => {
         environment: { build_timeout_sec: 180, cpus: 2, memory_mb: 2048, storage_mb: 500 },
       };
 
-      const workspace = await provider.setup(taskDir, [skillDir], taskConfig);
+      const workspace = await provider.setup(taskDir, [skillDir], taskConfig as any);
       tempDirs.push(workspace);
 
       const skillName = path.basename(skillDir);
@@ -67,6 +67,28 @@ describe('LocalProvider', () => {
       // Check Claude discovery path
       const claudePath = path.join(workspace, '.claude', 'skills', skillName, 'SKILL.md');
       expect(await fsExtra.pathExists(claudePath)).toBe(true);
+    });
+
+    it('cleans up temp directory if trialSetup fails', async () => {
+      const taskDir = path.join(os.tmpdir(), `skillgrade-test-task-${Date.now()}`);
+      await fsExtra.ensureDir(taskDir);
+      tempDirs.push(taskDir);
+
+      const taskConfig = {
+        version: '1',
+        graders: [],
+        agent: { timeout_sec: 300 },
+        environment: { cpus: 2, memory_mb: 2048 },
+        trialSetup: 'false',
+      };
+
+      const spyCleanup = vi.spyOn(provider, 'cleanup');
+
+      await expect(provider.setup(taskDir, [], taskConfig as any)).rejects.toThrow('Per-trial setup failed');
+
+      expect(spyCleanup).toHaveBeenCalled();
+      const calledWithPath = spyCleanup.mock.calls[0][0];
+      expect(await fsExtra.pathExists(calledWithPath)).toBe(false);
     });
   });
 

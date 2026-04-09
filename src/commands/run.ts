@@ -121,6 +121,7 @@ export async function runEvals(dir: string, opts: RunOptions) {
             timeoutSec: resolved.timeout,
             graderModel: resolved.grader_model,
             environment: resolved.environment,
+            trialSetup: resolved.trialSetup,
         };
 
         // Pick agent: CLI flag > task-level override > auto-detect from API key > default

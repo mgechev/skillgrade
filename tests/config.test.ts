@@ -129,6 +129,23 @@ tasks:
     expect(config.tasks[0].graders[1].type).toBe('llm_rubric');
   });
 
+  it('parses trialSetup correctly', async () => {
+    mockPathExists.mockResolvedValue(true as any);
+    const yaml = `version: "1"
+tasks:
+  - name: test-task
+    instruction: "do it"
+    trialSetup: "echo setup"
+    graders:
+      - type: deterministic
+        run: "echo ok"
+`;
+    mockReadFile.mockResolvedValue(yaml as any);
+
+    const config = await loadEvalConfig('/test');
+    expect(config.tasks[0].trialSetup).toBe('echo setup');
+  });
+
   it('applies default values when defaults not specified', async () => {
     mockPathExists.mockResolvedValue(true as any);
     const yaml = `version: "1"

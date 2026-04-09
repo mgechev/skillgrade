@@ -63,6 +63,7 @@ export abstract class BaseAgent {
 /** Options passed to environment providers for setup */
 export interface EnvironmentSetupOpts {
     timeoutSec: number;
+    trialSetup?: string;
     environment: {
         cpus: number;
         memory_mb: number;

@@ -52,6 +52,7 @@ export interface EvalRunOptions {
     instruction: string;
     graders: ResolvedGrader[];
     timeoutSec: number;
+    trialSetup?: string;
     graderModel?: string;       // default LLM grader model
     graderTimeoutSec?: number;  // timeout per grader (default: 120s)
     environment: {
@@ -173,9 +174,10 @@ export class EvalRunner {
         const startTime = Date.now();
 
         const spinner = new Spinner(`${index + 1}/${total}`, 'setting up environment');
-        const workspace = await this.provider.setup(taskPath, skillsPaths, opts, env);
+        let workspace: string | undefined;
 
         try {
+            workspace = await this.provider.setup(taskPath, skillsPaths, opts, env);
             const instruction = opts.instruction;
 
             sessionLog.push({
@@ -186,7 +188,7 @@ export class EvalRunner {
 
             spinner.update('running agent');
             const loggedRunCommand = async (cmd: string) => {
-                const result = await this.provider.runCommand(workspace, cmd, env);
+                const result = await this.provider.runCommand(workspace!, cmd, env);
                 commandCount++;
                 sessionLog.push({
                     type: 'command',
@@ -286,11 +288,12 @@ export class EvalRunner {
         } catch (err: any) {
             const duration_ms = Date.now() - startTime;
             const errorMsg = err?.message || String(err);
-            spinner.stop(`${fmt.fail('FAIL')}  ${errorMsg.substring(0, 50)}  ${fmt.dim((duration_ms / 1000).toFixed(1) + 's')}`);
+            spinner.stop(`${fmt.fail('FAIL')}  ${fmt.dim((duration_ms / 1000).toFixed(1) + 's')}`);
+            console.error(`\n${errorMsg}\n`);
 
 
             let diagnostics = '';
-            if (this.provider.diagnose) {
+            if (this.provider.diagnose && workspace) {
                 try {
                     diagnostics = await this.provider.diagnose(workspace);
                     console.log(diagnostics);
@@ -317,7 +320,9 @@ export class EvalRunner {
                 session_log: sessionLog
             };
         } finally {
-            await this.provider.cleanup(workspace);
+            if (workspace) {
+                await this.provider.cleanup(workspace);
+            }
         }
     }
 

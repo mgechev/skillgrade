@@ -41,6 +41,7 @@ export interface EvalTaskConfig {
     workspace?: WorkspaceMapping[];
     graders: EvalGraderConfig[];
     solution?: string;      // path to reference solution script
+    trialSetup?: string;    // task-specific setup command (runs per trial)
 
     // Per-task overrides
     agent?: string;
@@ -79,6 +80,7 @@ export interface ResolvedTask {
     workspace: WorkspaceMapping[];
     graders: ResolvedGrader[];
     solution?: string;      // resolved file path
+    trialSetup?: string;    // task-specific setup command (runs per trial)
     agent: string;
     provider: string;
     trials: number;

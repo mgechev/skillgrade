@@ -107,8 +107,21 @@ export class DockerProvider implements EnvironmentProvider {
             }
         });
 
-        await container.start();
-        return container.id;
+        try {
+            await container.start();
+
+            if (opts.trialSetup) {
+                const result = await this.runCommand(container.id, opts.trialSetup, env);
+                if (result.exitCode !== 0) {
+                    throw new Error(`Per-trial setup failed with exit code ${result.exitCode}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+                }
+            }
+
+            return container.id;
+        } catch (e) {
+            await this.cleanup(container.id);
+            throw e;
+        }
     }
 
     /**

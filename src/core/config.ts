@@ -116,6 +116,7 @@ function validateConfig(raw: any): EvalConfig {
             trials: t.trials,
             timeout: t.timeout,
             docker: t.docker,
+            trialSetup: t.trialSetup,
         };
     });
 
@@ -185,6 +186,7 @@ export async function resolveTask(
         grader_model,
         docker,
         environment,
+        trialSetup: task.trialSetup,
     };
 }
 
