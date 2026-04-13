@@ -275,6 +275,27 @@ tasks:
     expect(config.tasks[0].trialConfig?.env).toEqual({ TRIAL_VAR: 'trial' });
   });
 
+  it('parses default workspace correctly', async () => {
+    mockPathExists.mockResolvedValue(true as any);
+    const yaml = `version: "1"
+defaults:
+  workspace:
+    - fixtures/common.js
+tasks:
+  - name: test-task
+    instruction: "do it"
+    graders:
+      - type: deterministic
+        run: "echo ok"
+`;
+    mockReadFile.mockResolvedValue(yaml as any);
+
+    const config = await loadEvalConfig('/test');
+    expect(config.defaults.workspace).toEqual([
+      { src: 'fixtures/common.js', dest: 'common.js' },
+    ]);
+  });
+
   it('throws when defaults.environment.mounts is not an array', async () => {
     mockPathExists.mockResolvedValue(true as any);
     const yaml = `version: "1"
@@ -491,6 +512,33 @@ describe('resolveTask', () => {
 
     const resolved = await resolveTask(task, defaults, '/base');
     expect(resolved.workspace).toEqual([]);
+  });
+
+  it('merges workspace mappings correctly', async () => {
+    const defaultsWithWorkspace = {
+      ...defaults,
+      workspace: [
+        { src: 'common.js', dest: 'common.js' },
+        { src: 'default-only.js', dest: 'default-only.js' },
+      ],
+    };
+    const task: EvalTaskConfig = {
+      name: 'test-task',
+      instruction: 'do it',
+      workspace: [
+        { src: 'task-specific.js', dest: 'task-specific.js' },
+        { src: 'overridden.js', dest: 'common.js' },
+      ],
+      graders: [{ type: 'deterministic', run: 'echo ok', weight: 1.0 }],
+    };
+
+    mockPathExists.mockResolvedValue(false as any);
+
+    const resolved = await resolveTask(task, defaultsWithWorkspace, '/base');
+    expect(resolved.workspace).toHaveLength(3);
+    expect(resolved.workspace).toContainEqual({ src: 'default-only.js', dest: 'default-only.js' });
+    expect(resolved.workspace).toContainEqual({ src: 'task-specific.js', dest: 'task-specific.js' });
+    expect(resolved.workspace).toContainEqual({ src: 'overridden.js', dest: 'common.js' });
   });
 
   it('preserves grader setup field', async () => {

@@ -78,6 +78,7 @@ export interface EvalDefaults {
     environment: EnvironmentConfig;
     env?: Record<string, string>;
     trialConfig?: TrialConfig;
+    workspace?: WorkspaceMapping[];
 }
 
 /** Top-level eval.yaml */

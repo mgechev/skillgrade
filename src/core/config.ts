@@ -86,6 +86,29 @@ function validateTrialConfig(tc: any, context: string) {
     }
 }
 
+function validateWorkspaceMappings(workspace: any, context: string): WorkspaceMapping[] {
+    if (!workspace) return [];
+    if (!Array.isArray(workspace)) {
+        throw new Error(`${context} workspace must be an array`);
+    }
+    return workspace.map((w: any) => {
+        if (typeof w === 'string') {
+            // Support shorthand: "fixtures/app.js" → same filename in workspace
+            return { src: w, dest: path.basename(w) };
+        }
+        if (!w.dest) {
+            throw new Error(`${context} has a workspace mapping without dest`);
+        }
+        if (!w.src && w.content === undefined) {
+            throw new Error(`${context} has a workspace mapping without src or content`);
+        }
+        if (w.src && w.content !== undefined) {
+            throw new Error(`${context} has a workspace mapping with both src and content`);
+        }
+        return { src: w.src, content: w.content, dest: w.dest, chmod: w.chmod };
+    });
+}
+
 /**
  * Validate raw parsed YAML into a typed EvalConfig.
  */
@@ -108,6 +131,7 @@ function validateConfig(raw: any): EvalConfig {
         },
         env: raw.defaults?.env,
         trialConfig: raw.defaults?.trialConfig,
+        workspace: validateWorkspaceMappings(raw.defaults?.workspace, 'defaults'),
     };
 
     validateMounts(defaults.environment.mounts, 'defaults.environment.mounts');
@@ -134,23 +158,7 @@ function validateConfig(raw: any): EvalConfig {
             throw new Error(`Task "${t.name}" agentWorkingDir must be a string`);
         }
 
-        const workspace: WorkspaceMapping[] = (t.workspace || []).map((w: any) => {
-            if (typeof w === 'string') {
-                // Support shorthand: "fixtures/app.js" → same filename in workspace
-                return { src: w, dest: path.basename(w) };
-            }
-            if (!w.dest) {
-                throw new Error(`Task "${t.name}" has a workspace mapping without dest`);
-            }
-            if (!w.src && w.content === undefined) {
-                throw new Error(`Task "${t.name}" has a workspace mapping without src or content`);
-            }
-            if (w.src && w.content !== undefined) {
-                throw new Error(`Task "${t.name}" has a workspace mapping with both src and content`);
-            }
-            return { src: w.src, content: w.content, dest: w.dest, chmod: w.chmod };
-        });
-
+        const workspace = validateWorkspaceMappings(t.workspace, `Task "${t.name}"`);
         return {
             name: t.name,
             instruction: t.instruction,
@@ -294,7 +302,7 @@ export async function resolveTask(
     return {
         name: task.name,
         instruction,
-        workspace: task.workspace || [],
+        workspace: mergeWorkspaces(defaults.workspace, task.workspace),
         graders,
         solution,
         agent,
@@ -339,4 +347,15 @@ async function resolveFileOrInline(value: string, baseDir: string): Promise<stri
     }
 
     return trimmed;
+}
+
+function mergeWorkspaces(defaults: WorkspaceMapping[] = [], task: WorkspaceMapping[] = []): WorkspaceMapping[] {
+    const map = new Map<string, WorkspaceMapping>();
+    for (const w of defaults) {
+        map.set(w.dest, w);
+    }
+    for (const w of task) {
+        map.set(w.dest, w); // Overwrite if dest is same
+    }
+    return Array.from(map.values());
 }
