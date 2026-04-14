@@ -87,7 +87,6 @@ function validateTrialConfig(tc: any, context: string) {
     }
 }
 
-<<<<<<< Updated upstream
 function validateWorkspaceMappings(workspace: any, context: string): WorkspaceMapping[] {
     if (!workspace) return [];
     if (!Array.isArray(workspace)) {
@@ -109,12 +108,12 @@ function validateWorkspaceMappings(workspace: any, context: string): WorkspaceMa
         }
         return { src: w.src, content: w.content, dest: w.dest, chmod: w.chmod };
     });
-=======
+}
+
 function validateEnv(env: any, context: string) {
     if (env && (typeof env !== 'object' || Array.isArray(env))) {
         throw new Error(`${context} must be a YAML object (key: value pairs)`);
     }
->>>>>>> Stashed changes
 }
 
 /**
