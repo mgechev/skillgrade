@@ -59,9 +59,11 @@ Reports are saved to `$TMPDIR/skillgrade/<skill-name>/results/`. Override with `
 | `--grader=TYPE` | Run only graders of a type (`deterministic` or `llm_rubric`) |
 | `--trials=N` | Override trial count |
 | `--parallel=N` | Run trials concurrently |
-| `--agent=gemini\|claude\|codex\|acp` | Override agent (default: auto-detect from API key) |
+| `--agent=gemini\|claude\|codex\|acp\|opencode` | Override agent (default: auto-detect from API key) |
 | `--provider=docker\|local` | Override provider |
 | `--acp-command=CMD` | ACP agent command (e.g., `gemini --acp`) |
+| `--opencode-agent=NAME` | OpenCode agent (build\|plan\|explore) |
+| `--opencode-model=MODEL` | OpenCode model (provider/model format) |
 | `--output=DIR` | Output directory (default: `$TMPDIR/skillgrade`) |
 | `--validate` | Verify graders using reference solutions |
 | `--ci` | CI mode: exit non-zero if below threshold |
@@ -236,6 +238,55 @@ Exits with code 1 if pass rate falls below `--threshold` (default: 0.8).
 | `OPENAI_API_KEY` | Agent execution (Codex), `skillgrade init` |
 
 Variables are also loaded from `.env` in the skill directory. Shell values override `.env`. All values are **redacted** from persisted session logs.
+
+## OpenCode Agent
+
+[OpenCode](https://opencode.ai/) is an AI coding agent that supports multiple AI models and specialized subagents.
+
+### Quick Start
+
+```bash
+# Use OpenCode with default agent and model
+skillgrade --agent=opencode
+
+# Specify OpenCode agent (build|plan|explore)
+skillgrade --agent=opencode --opencode-agent=build
+
+# Specify both agent and model (provider/model format)
+skillgrade --agent=opencode --opencode-agent=build --opencode-model=anthropic/claude-sonnet-4-20250514
+```
+
+### OpenCode Agents
+
+| Agent | Description |
+|-------|-------------|
+| `build` | Default primary agent with full tool access |
+| `plan` | Read-only planning/analysis agent |
+| `explore` | Fast codebase exploration agent |
+
+### OpenCode Models
+
+Models are specified in `provider/model` format:
+
+| Model | Format |
+|-------|--------|
+| Claude Sonnet 4 | `anthropic/claude-sonnet-4-20250514` |
+| GPT 5.1 Codex | `opencode/gpt-5.1-codex` |
+
+### CLI Options
+
+| Flag | Description |
+|------|-------------|
+| `--agent=opencode` | Use OpenCode agent |
+| `--opencode-agent=NAME` | OpenCode agent (build\|plan\|explore) |
+| `--opencode-model=MODEL` | OpenCode model (provider/model format) |
+
+### How It Works
+
+1. skillgrade invokes OpenCode CLI with `opencode run`
+2. Passes instruction via temp file to avoid shell escaping issues
+3. Supports both agent and model specification
+4. Works with `--provider=docker` or `--provider=local`
 
 ## ACP Agent
 

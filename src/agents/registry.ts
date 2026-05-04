@@ -6,26 +6,31 @@
  *   - claude: Anthropic Claude Code CLI
  *   - codex: OpenAI Codex CLI
  *   - acp: Agent Client Protocol compatible agents
+ *   - opencode: OpenCode AI coding agent
  */
 import { BaseAgent } from '../types';
 import { GeminiAgent } from './gemini';
 import { ClaudeAgent } from './claude';
 import { CodexAgent } from './codex';
 import { AcpAgent, AcpAgentConfig } from './acp';
+import { OpenCodeAgent, OpenCodeAgentConfig } from './opencode';
 
 /** Configuration for agent creation */
 export interface AgentConfig {
     /** ACP-specific configuration */
     acp?: AcpAgentConfig;
+    /** OpenCode-specific configuration */
+    opencode?: OpenCodeAgentConfig;
 }
 
 /** Registry of available agent implementations */
-const AGENT_REGISTRY: Record<string, () => BaseAgent> = {
+const AGENT_REGISTRY: Record<string, (config?: AgentConfig) => BaseAgent> = {
     gemini: () => new GeminiAgent(),
     claude: () => new ClaudeAgent(),
     codex: () => new CodexAgent(),
     // ACP agent requires config, registered as placeholder
-    acp: () => new AcpAgent({ command: 'gemini --acp' }),
+    acp: (config) => new AcpAgent(config?.acp || { command: 'gemini --acp' }),
+    opencode: (config) => new OpenCodeAgent(config?.opencode || {}),
 };
 
 /** Get the list of supported agent names */
@@ -35,15 +40,10 @@ export function getAgentNames(): string[] {
 
 /** Create an agent instance by name. Throws if the name is unknown. */
 export function createAgent(name: string, config?: AgentConfig): BaseAgent {
-    // Handle ACP agent with custom configuration
-    if (name === 'acp' && config?.acp) {
-        return new AcpAgent(config.acp);
-    }
-
     const factory = AGENT_REGISTRY[name];
     if (!factory) {
         const available = getAgentNames().join(', ');
         throw new Error(`Unknown agent "${name}". Available agents: ${available}`);
     }
-    return factory();
+    return factory(config);
 }
