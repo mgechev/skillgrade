@@ -228,6 +228,46 @@ describe('LLMGrader', () => {
       globalThis.fetch = originalFetch;
     });
 
+    it('leaves the internal prompt-delivery command out of the transcript sent to the grader', async () => {
+      mockPathExists.mockResolvedValue(true as any);
+      mockReadFile.mockResolvedValue('rubric content' as any);
+
+      const instruction = 'Create a file named hello.txt that contains the word hello';
+      const promptCommand = `echo '${Buffer.from(instruction).toString('base64')}' | base64 -d > /tmp/.prompt.md`;
+      const sessionLog = [
+        { type: 'agent_start', instruction },
+        { type: 'command', command: promptCommand, stdout: '', stderr: '', exitCode: 0 },
+        { type: 'command', command: 'claude -p "$(cat /tmp/.prompt.md)"', stdout: 'created hello.txt', stderr: '', exitCode: 0 },
+        // A command of the agent's own that happens to decode base64 is real behavior and stays
+        { type: 'command', command: "echo 'aGVsbG8=' | base64 -d > hello.txt", stdout: '', stderr: '', exitCode: 0 },
+      ];
+
+      const originalFetch = globalThis.fetch;
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          candidates: [{ content: { parts: [{ text: '{"score": 1, "reasoning": "ok"}' }] } }],
+        }),
+      } as any);
+      globalThis.fetch = fetchMock as any;
+
+      const provider = makeProvider('');
+      const env = { GEMINI_API_KEY: 'test-key' };
+      await grader.grade('/workspace', provider, baseConfig, '/task', sessionLog, env);
+      globalThis.fetch = originalFetch;
+
+      const sentPrompt = String(fetchMock.mock.calls[0]![1].body);
+      // The instruction still reaches the grader, in its own section
+      expect(sentPrompt).toContain('## Task Instruction');
+      expect(sentPrompt).toContain(instruction);
+      // The base64 blob that delivers it to the agent CLI does not
+      expect(sentPrompt).not.toContain(Buffer.from(instruction).toString('base64'));
+      expect(sentPrompt).not.toContain('/tmp/.prompt.md\\n');
+      // The agent's own commands are kept
+      expect(sentPrompt).toContain('claude -p');
+      expect(sentPrompt).toContain('base64 -d > hello.txt');
+    });
+
     it('handles markdown-wrapped JSON in LLM response', async () => {
       mockPathExists.mockResolvedValue(true as any);
       mockReadFile.mockResolvedValue('rubric content' as any);
