@@ -86,6 +86,13 @@ export class DeterministicGrader implements Grader {
 }
 
 /**
+ * The command the agents run to hand their instruction to the agent CLI (see src/agents): the
+ * instruction as one base64 string. The grader already gets the instruction as text, and a long
+ * base64 string in a transcript can make a model provider's content filter reject the request.
+ */
+const PROMPT_DELIVERY_COMMAND = /^echo '[A-Za-z0-9+/=]+' \| base64 -d > \/tmp\/\.prompt\.md$/;
+
+/**
  * Uses an LLM to evaluate the agent's session transcript against a rubric.
  *
  * Supported providers (selected via `config.provider`, defaults to "gemini"):
@@ -127,8 +134,10 @@ export class LLMGrader implements Grader {
             sections.push(`## Task Instruction\n${instructionEntry.instruction}`);
         }
 
-        // Include all commands and their output
-        const commandEntries = sessionLog.filter(e => e.type === 'command');
+        // Include all commands and their output, except the internal prompt delivery
+        const commandEntries = sessionLog.filter(e =>
+            e.type === 'command' && !PROMPT_DELIVERY_COMMAND.test(String(e.command ?? '').trim())
+        );
         if (commandEntries.length > 0) {
             const cmds = commandEntries.map(e =>
                 `$ ${e.command}\n${e.stdout || ''}${e.stderr ? '\nSTDERR: ' + e.stderr : ''}\n[exit code: ${e.exitCode ?? 'unknown'}]`
