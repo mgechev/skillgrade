@@ -45,6 +45,14 @@ const AGENT_REGISTRY: Record<string, (config?: AgentConfig) => BaseAgent> = {
     command: (config) => new CommandAgent(config?.command as CommandAgentConfig),
 };
 
+/**
+ * Register a custom agent implementation.
+ * If an agent with the same name already exists, it is replaced.
+ */
+export function registerAgent(name: string, factory: (config?: AgentConfig) => BaseAgent): void {
+    AGENT_REGISTRY[name] = factory;
+}
+
 /** Get the list of supported agent names */
 export function getAgentNames(): string[] {
     return Object.keys(AGENT_REGISTRY);

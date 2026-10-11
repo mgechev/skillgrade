@@ -120,6 +120,7 @@ async function main() {
         command: getFlag('command'),
         openCodeAgent: getFlag('opencode-agent'),
         openCodeModel: getFlag('opencode-model'),
+        format: getFlag('format') as any,
     });
 
     if (openPreview) {
@@ -129,7 +130,7 @@ async function main() {
 
 function printHelp() {
     console.log(`
-  skillgrade - The easiest way to evaluate your Agent Skills
+  skillgrade - The easiest way to evaluate your Agent Skills and AI agents
 
   Usage:
     skillgrade                     Run all evals from eval.yaml
@@ -151,7 +152,7 @@ function printHelp() {
     --list             Print the selected tasks and exit without running
 
   Options:
-    --grader=TYPE      Run only graders of this type (deterministic|llm_rubric)
+    --grader=TYPE      Run only graders of this type (deterministic|llm_rubric|human)
     --trials=N         Override trial count (overrides preset)
     --parallel=N       Run trials concurrently
     --agent=gemini|claude|codex|acp|opencode|command   Override agent (default: auto-detect from API key)
@@ -165,6 +166,7 @@ function printHelp() {
     --opencode-model=MODEL OpenCode model (provider/model format)
     --output=DIR       Output directory for reports and temp files
                        Default: $TMPDIR/skillgrade
+    --format=json      Output format for results
     --validate         Verify graders using reference solutions
     --ci               CI mode: exit non-zero if below threshold
     --threshold=0.8    Pass rate threshold for CI mode

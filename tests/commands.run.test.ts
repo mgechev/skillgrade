@@ -27,7 +27,7 @@ interface TaskConfig {
     tags: string[];
   };
   graders: Array<{
-    type: 'deterministic' | 'llm_rubric';
+    type: 'deterministic' | 'llm_rubric' | 'human';
     command?: string;
     rubric?: string;
     weight: number;

@@ -2,6 +2,19 @@ import { GraderConfig, GraderResult, EnvironmentProvider } from '../types';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { resolveGeminiModel, resolveAnthropicModel, resolveOpenAIModel } from '../utils/models';
+import { DeterministicGrader } from './deterministic';
+import { HumanGrader } from './human';
+
+export { DeterministicGrader } from './deterministic';
+export { HumanGrader } from './human';
+
+/** Extensible grader registry. Built-in types are pre-registered. */
+const GRADER_REGISTRY = new Map<string, () => Grader>();
+
+/** Register a custom grader type. If the type already exists, it is replaced. */
+export function registerGrader(type: string, factory: () => Grader): void {
+    GRADER_REGISTRY.set(type, factory);
+}
 
 export interface Grader {
     grade(
@@ -14,76 +27,6 @@ export interface Grader {
     ): Promise<GraderResult>;
 }
 
-/**
- * Runs a command and parses structured JSON from stdout.
- *
- * The grader script MUST output JSON to stdout:
- *   { "score": 0.0-1.0, "details": "...", "checks": [...] }
- *
- * - score: float between 0.0 and 1.0
- * - details: human-readable summary
- * - checks: optional array of { name, passed, message } for per-check breakdown
- */
-export class DeterministicGrader implements Grader {
-    async grade(
-        workspace: string,
-        provider: EnvironmentProvider,
-        config: GraderConfig,
-        _taskPath: string,
-        _sessionLog: any[],
-        env?: Record<string, string>
-    ): Promise<GraderResult> {
-        const command = config.command || 'bash tests/test.sh';
-
-        // Hand the grader its task context as one JSON document. One variable
-        // rather than one per field, so `expected` keeps its structure.
-        const graderEnv = config.input
-            ? { ...env, SKILLGRADE_INPUT: JSON.stringify(config.input) }
-            : env;
-
-        const result = await provider.runCommand(workspace, command, graderEnv);
-
-        // Parse JSON from stdout
-        const jsonMatch = result.stdout.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            return {
-                grader_type: 'deterministic',
-                score: 0,
-                weight: config.weight,
-                details: `Grader did not output JSON. stdout: ${result.stdout.trim() || '(empty)'} stderr: ${result.stderr.trim() || '(empty)'}`
-            };
-        }
-
-        try {
-            const parsed = JSON.parse(jsonMatch[0]);
-            const score = Math.max(0, Math.min(1, parseFloat(parsed.score) || 0));
-            const details = parsed.details || `score=${score.toFixed(2)}`;
-            const checks = parsed.checks || [];
-
-            // Build rich details string with per-check breakdown
-            const checkLines = checks.map((c: any) =>
-                `  ${c.passed ? '✓' : '✗'} ${c.name}: ${c.message || ''}`
-            );
-            const fullDetails = checkLines.length > 0
-                ? `${details}\n${checkLines.join('\n')}`
-                : details;
-
-            return {
-                grader_type: 'deterministic',
-                score,
-                weight: config.weight,
-                details: fullDetails
-            };
-        } catch (e) {
-            return {
-                grader_type: 'deterministic',
-                score: 0,
-                weight: config.weight,
-                details: `Failed to parse grader JSON: ${jsonMatch[0].substring(0, 200)}`
-            };
-        }
-    }
-}
 
 /**
  * The command the agents run to hand their instruction to the agent CLI (see src/agents): the
@@ -419,11 +362,19 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
     }
 }
 
-/** Resolve a grader implementation by type */
+
+// Pre-register built-in graders
+GRADER_REGISTRY.set('deterministic', () => new DeterministicGrader());
+GRADER_REGISTRY.set('llm_rubric', () => new LLMGrader());
+GRADER_REGISTRY.set('human', () => new HumanGrader());
+
+/** Resolve a grader implementation by type. */
 export function getGrader(type: string): Grader {
-    switch (type) {
-        case 'deterministic': return new DeterministicGrader();
-        case 'llm_rubric': return new LLMGrader();
-        default: throw new Error(`Unknown grader type: ${type}`);
+    const factory = GRADER_REGISTRY.get(type);
+    if (!factory) {
+        const available = Array.from(GRADER_REGISTRY.keys()).join(', ');
+        throw new Error(`Unknown grader type: "${type}". Available: ${available}`);
     }
+    return factory();
 }
+

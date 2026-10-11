@@ -130,10 +130,21 @@ function validateConfig(raw: any): EvalConfig {
             return { src: w.src, dest: w.dest, chmod: w.chmod };
         });
 
+        const context: WorkspaceMapping[] = (t.context || []).map((w: any) => {
+            if (typeof w === 'string') {
+                return { src: w, dest: path.basename(w) };
+            }
+            if (!w.src || !w.dest) {
+                throw new Error(`Task "${t.name}" has a context mapping without src/dest`);
+            }
+            return { src: w.src, dest: w.dest, chmod: w.chmod };
+        });
+
         return {
             name: t.name,
             instruction: t.instruction,
             workspace,
+            context,
             graders: t.graders.map((g: any) => {
                 if (g.provider && !validGraderProviders.includes(g.provider)) {
                     throw new Error(`Task "${t.name}" grader has invalid provider "${g.provider}", must be one of ${validGraderProviders.join(', ')}`);
@@ -146,6 +157,11 @@ function validateConfig(raw: any): EvalConfig {
                     model: g.model,
                     provider: g.provider,
                     weight: g.weight ?? 1.0,
+                    expected: g.expected,
+                    substrings: g.substrings,
+                    pattern: g.pattern,
+                    expected_json: g.expected_json,
+                    files: g.files,
                 };
             }),
             solution: t.solution,
@@ -221,6 +237,9 @@ export async function resolveTask(
             if (g.type === 'llm_rubric' && g.rubric) {
                 resolved.rubric = await resolveFileOrInline(g.rubric, baseDirs);
             }
+            if (g.type === 'human' && g.prompt) {
+                resolved.prompt = await resolveFileOrInline(g.prompt, baseDirs);
+            }
             return resolved;
         })
     );
@@ -234,6 +253,7 @@ export async function resolveTask(
         name: task.name,
         instruction,
         workspace: task.workspace || [],
+        context: task.context || [],
         graders,
         solution,
         expected: task.expected,

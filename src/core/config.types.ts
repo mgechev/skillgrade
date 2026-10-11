@@ -14,13 +14,15 @@ export interface WorkspaceMapping {
 
 /** Grader definition */
 export interface EvalGraderConfig {
-    type: 'deterministic' | 'llm_rubric';
+    type: 'deterministic' | 'llm_rubric' | 'human';
     setup?: string;                               // commands to install grader dependencies (runs during image build)
     run?: string;                                 // inline script or file path (deterministic)
     rubric?: string;                              // inline rubric or file path (llm_rubric)
     model?: string;                               // model override, e.g. 'claude-sonnet-5' or 'gemini-3-flash-preview'
     provider?: 'gemini' | 'anthropic' | 'openai'; // which LLM API to call (default: 'gemini')
     weight: number;
+    /** For human: instructions shown to the reviewer when scoring this task */
+    prompt?: string;
 }
 
 /** Docker configuration */
@@ -48,6 +50,8 @@ export interface EvalTaskConfig {
     name: string;
     instruction: string;    // inline text or path to .md file
     workspace?: WorkspaceMapping[];
+    /** Context files injected into the workspace for the agent (docs, specs, schemas). Unlike workspace files which are evaluation fixtures, context files shape agent behavior. */
+    context?: WorkspaceMapping[];
     graders: EvalGraderConfig[];
     solution?: string;      // path to reference solution script
 
@@ -110,6 +114,8 @@ export interface ResolvedTask {
     name: string;
     instruction: string;    // actual content (not file path)
     workspace: WorkspaceMapping[];
+    /** Context files injected for agent reference. Optional — defaults to []. */
+    context?: WorkspaceMapping[];
     graders: ResolvedGrader[];
     solution?: string;      // resolved file path
     expected?: unknown;                     // reference output — graders only, never the workspace
@@ -130,11 +136,13 @@ export interface ResolvedTask {
 }
 
 export interface ResolvedGrader {
-    type: 'deterministic' | 'llm_rubric';
+    type: 'deterministic' | 'llm_rubric' | 'human';
     setup?: string;                               // resolved setup commands
     run?: string;                                 // resolved content for deterministic
     rubric?: string;                              // resolved content for llm_rubric
     model?: string;                               // resolved model override
     provider?: 'gemini' | 'anthropic' | 'openai'; // which LLM API to call (default: 'gemini')
     weight: number;
+    /** For human: resolved prompt text shown to the reviewer */
+    prompt?: string;
 }

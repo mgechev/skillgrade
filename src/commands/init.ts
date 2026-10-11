@@ -29,9 +29,32 @@ export async function runInit(dir: string, opts: { force?: boolean } = {}) {
   const skills = await detectSkills(dir);
 
   if (skills.length === 0) {
-    console.log('  No SKILL.md found. Creating a generic template.');
-    console.log('     Place a SKILL.md in this directory for better scaffolding.\n');
-    await writeTemplate(evalPath, 'my-skill', 'Describe what the agent should do with this skill.');
+    const { fmt } = await import('../utils/cli');
+    console.log(`  ${fmt.dim('No SKILL.md found — generating generic eval template')}`);
+    const genericTemplate = `version: "1"
+
+defaults:
+  agent: gemini
+  provider: docker
+  trials: 5
+  timeout: 300
+  docker:
+    base: node:20-slim
+
+tasks:
+  - name: example-task
+    instruction: |
+      # TODO: Replace with your task instruction
+      Describe what the agent should do.
+    workspace: []
+    graders:
+      - type: deterministic
+        run: |
+          # TODO: Replace with your grading logic
+          echo '{"score": 0, "details": "Not implemented yet"}'
+        weight: 1.0
+`;
+    await fs.writeFile(evalPath, genericTemplate, 'utf-8');
     return;
   }
 

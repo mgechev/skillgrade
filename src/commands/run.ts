@@ -41,6 +41,7 @@ interface RunOptions {
     command?: string;    // command agent command (e.g., "node mycli.js")
     openCodeAgent?: string;   // OpenCode agent (build|plan|explore)
     openCodeModel?: string;   // OpenCode model (provider/model format)
+    format?: 'json';     // output format for results
 }
 
 async function loadEnvFile(filePath: string): Promise<Record<string, string>> {
@@ -310,6 +311,14 @@ export async function runEvals(dir: string, opts: RunOptions) {
         }
         console.log(`\n  ${fmt.pass('CI PASSED')}  above threshold ${(threshold * 100).toFixed(0)}%\n`);
     }
+
+    // Export results in requested format
+    if (opts.format === 'json') {
+        const jsonOutput = JSON.stringify(reports, null, 2);
+        const jsonPath = path.join(resultsDir, 'summary.json');
+        await fs.writeJSON(jsonPath, reports, { spaces: 2 });
+        console.log(`\n  ${fmt.dim('JSON report:')} ${jsonPath}\n`);
+    }
 }
 
 /**
@@ -413,6 +422,27 @@ export async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string
                 dockerfileContent += `COPY ${path.basename(w.src)} ${w.dest}\n`;
                 if (w.chmod) {
                     dockerfileContent += `RUN chmod ${w.chmod} ${w.dest}\n`;
+                }
+            }
+        }
+    }
+
+    // Copy context files (injected for agent reference, not evaluation fixtures)
+    if (resolved.context && resolved.context.length > 0) {
+        for (const c of resolved.context) {
+            const srcPath = await findSrc(c.src);
+            if (srcPath) {
+                if (resolved.provider === 'local') {
+                    const destPath = path.join(tmpDir, c.dest);
+                    await fs.ensureDir(path.dirname(destPath));
+                    await fs.copy(srcPath, destPath);
+                } else {
+                    const destInTmp = path.join(tmpDir, path.basename(c.src));
+                    await fs.copy(srcPath, destInTmp);
+                    dockerfileContent += `COPY ${path.basename(c.src)} ${c.dest}\n`;
+                    if (c.chmod) {
+                        dockerfileContent += `RUN chmod ${c.chmod} ${c.dest}\n`;
+                    }
                 }
             }
         }

@@ -5,13 +5,15 @@ export interface CommandResult {
 }
 
 export interface GraderConfig {
-    type: 'deterministic' | 'llm_rubric';
+    type: 'deterministic' | 'llm_rubric' | 'human';
     command?: string;                             // for deterministic: shell command to execute (e.g. 'bash tests/test.sh')
     rubric?: string;                              // for llm_rubric: file path to rubric (e.g. 'prompts/quality.md')
     model?: string;                               // for llm_rubric: LLM model override
     provider?: 'gemini' | 'anthropic' | 'openai'; // for llm_rubric: which LLM API to call (default: 'gemini')
     weight: number;
     input?: GraderInput;                          // task context handed to the grader at grade time
+    /** For human: instructions shown to the reviewer */
+    prompt?: string;
 }
 
 /**
