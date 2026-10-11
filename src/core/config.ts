@@ -7,13 +7,18 @@ import {
     EvalConfig,
     EvalDefaults,
     EvalTaskConfig,
+    EvalTurnConfig,
     ResolvedTask,
+    ResolvedTurn,
     ResolvedGrader,
     WorkspaceMapping,
     EnvironmentConfig,
     AcpConfig,
 } from './config.types';
 import { loadYamlWithImports, sourceFileOf } from './imports';
+import { expandDatasetTasks } from './dataset';
+
+export { expandDatasetTasks } from './dataset';
 
 // We use a simple YAML parser — js-yaml is the standard
 // For now, we'll use a lightweight approach: JSON-compatible YAML subset
@@ -45,13 +50,13 @@ export async function loadEvalConfig(dir: string): Promise<EvalConfig> {
     // Sections may live in other files — expand every `$import` first
     const raw = await loadYamlWithImports(yamlPath);
 
-    return validateConfig(raw);
+    return validateConfig(raw, dir);
 }
 
 /**
  * Validate raw parsed YAML into a typed EvalConfig.
  */
-function validateConfig(raw: any): EvalConfig {
+export async function validateConfig(raw: any, configDir: string = '.'): Promise<EvalConfig> {
     if (!raw || typeof raw !== 'object') {
         throw new Error('eval.yaml must be a YAML object');
     }
@@ -100,8 +105,16 @@ function validateConfig(raw: any): EvalConfig {
 
     const tasks: EvalTaskConfig[] = raw.tasks.map((t: any, i: number) => {
         if (!t.name) throw new Error(`Task ${i} is missing a "name"`);
-        if (!t.instruction) throw new Error(`Task "${t.name}" is missing an "instruction"`);
-        if (!t.graders || !Array.isArray(t.graders) || t.graders.length === 0) {
+        if (t.instruction && t.turns) {
+            throw new Error(`Task "${t.name}" cannot have both "instruction" and "turns"`);
+        }
+        if (!t.instruction && !t.turns) {
+            throw new Error(`Task "${t.name}" is missing an "instruction" or "turns" (must have either "instruction" or "turns")`);
+        }
+        if (t.turns && (!Array.isArray(t.turns) || t.turns.length === 0)) {
+            throw new Error(`Task "${t.name}" turns must be a non-empty array`);
+        }
+        if (!t.turns && (!t.graders || !Array.isArray(t.graders) || t.graders.length === 0)) {
             throw new Error(`Task "${t.name}" must have at least one grader`);
         }
         if (t.grader_provider && !validGraderProviders.includes(t.grader_provider)) {
@@ -140,30 +153,53 @@ function validateConfig(raw: any): EvalConfig {
             return { src: w.src, dest: w.dest, chmod: w.chmod };
         });
 
+        const mapGrader = (g: any, contextStr: string) => {
+            if (g.provider && !validGraderProviders.includes(g.provider)) {
+                throw new Error(`${contextStr} grader has invalid provider "${g.provider}", must be one of ${validGraderProviders.join(', ')}`);
+            }
+            return {
+                type: g.type,
+                setup: g.setup,
+                run: g.run,
+                rubric: g.rubric,
+                model: g.model,
+                provider: g.provider,
+                weight: g.weight ?? 1.0,
+                expected: g.expected,
+                substrings: g.substrings,
+                pattern: g.pattern,
+                expected_json: g.expected_json,
+                files: g.files,
+                prompt: g.prompt,
+            };
+        };
+
+        const turns: EvalTurnConfig[] | undefined = t.turns
+            ? t.turns.map((turn: any, turnIdx: number) => {
+                if (!turn.instruction) {
+                    throw new Error(`Task "${t.name}" turn ${turnIdx} is missing an "instruction"`);
+                }
+                return {
+                    instruction: turn.instruction,
+                    graders: (turn.graders || []).map((g: any) =>
+                        mapGrader(g, `Task "${t.name}" turn ${turnIdx}`)
+                    ),
+                };
+            })
+            : undefined;
+
+        const graders = (t.graders || []).map((g: any) =>
+            mapGrader(g, `Task "${t.name}"`)
+        );
+
         return {
             name: t.name,
             instruction: t.instruction,
+            turns,
+            dataset: t.dataset,
             workspace,
             context,
-            graders: t.graders.map((g: any) => {
-                if (g.provider && !validGraderProviders.includes(g.provider)) {
-                    throw new Error(`Task "${t.name}" grader has invalid provider "${g.provider}", must be one of ${validGraderProviders.join(', ')}`);
-                }
-                return {
-                    type: g.type,
-                    setup: g.setup,
-                    run: g.run,
-                    rubric: g.rubric,
-                    model: g.model,
-                    provider: g.provider,
-                    weight: g.weight ?? 1.0,
-                    expected: g.expected,
-                    substrings: g.substrings,
-                    pattern: g.pattern,
-                    expected_json: g.expected_json,
-                    files: g.files,
-                };
-            }),
+            graders,
             solution: t.solution,
             expected: t.expected,
             metadata: t.metadata,
@@ -181,7 +217,9 @@ function validateConfig(raw: any): EvalConfig {
         };
     });
 
-    return { version, skill: raw.skill, defaults, tasks };
+    const expandedTasks = await expandDatasetTasks(tasks, configDir);
+
+    return { version, skill: raw.skill, defaults, tasks: expandedTasks };
 }
 
 /**
@@ -218,12 +256,9 @@ export async function resolveTask(
         baseDir,
     ])];
 
-    // Resolve instruction — could be inline text or file path
-    const instruction = await resolveFileOrInline(task.instruction, baseDirs);
-
     // Resolve graders
-    const graders: ResolvedGrader[] = await Promise.all(
-        task.graders.map(async g => {
+    const resolveGradersList = (gradersList: any[]) => Promise.all(
+        gradersList.map(async g => {
             const resolved: ResolvedGrader = {
                 type: g.type,
                 setup: g.setup,
@@ -244,6 +279,22 @@ export async function resolveTask(
         })
     );
 
+    const graders: ResolvedGrader[] = await resolveGradersList(task.graders || []);
+
+    const turns: ResolvedTurn[] | undefined = task.turns
+        ? await Promise.all(
+            task.turns.map(async turn => ({
+                instruction: await resolveFileOrInline(turn.instruction, baseDirs),
+                graders: await resolveGradersList(turn.graders || []),
+            }))
+        )
+        : undefined;
+
+    // Resolve instruction — could be inline text or file path
+    const instruction = task.instruction
+        ? await resolveFileOrInline(task.instruction, baseDirs)
+        : (turns?.[0]?.instruction || '');
+
     // Resolve solution path
     const solution = task.solution
         ? await resolveExistingPath(task.solution, baseDirs)
@@ -252,6 +303,7 @@ export async function resolveTask(
     return {
         name: task.name,
         instruction,
+        turns,
         workspace: task.workspace || [],
         context: task.context || [],
         graders,

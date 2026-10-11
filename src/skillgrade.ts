@@ -120,7 +120,7 @@ async function main() {
         command: getFlag('command'),
         openCodeAgent: getFlag('opencode-agent'),
         openCodeModel: getFlag('opencode-model'),
-        format: getFlag('format') as any,
+        format: getFlags('format').length > 0 ? getFlags('format').join(',') : undefined,
     });
 
     if (openPreview) {
@@ -166,7 +166,7 @@ function printHelp() {
     --opencode-model=MODEL OpenCode model (provider/model format)
     --output=DIR       Output directory for reports and temp files
                        Default: $TMPDIR/skillgrade
-    --format=json      Output format for results
+    --format=FORMAT    Output format (json|junit|csv|markdown)
     --validate         Verify graders using reference solutions
     --ci               CI mode: exit non-zero if below threshold
     --threshold=0.8    Pass rate threshold for CI mode

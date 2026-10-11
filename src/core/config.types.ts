@@ -45,10 +45,17 @@ export interface AcpConfig {
     env?: Record<string, string>;
 }
 
+export interface EvalTurnConfig {
+    instruction: string;
+    graders?: EvalGraderConfig[];  // optional — grade after this turn
+}
+
 /** Single eval task */
 export interface EvalTaskConfig {
     name: string;
-    instruction: string;    // inline text or path to .md file
+    instruction?: string;    // inline text or path to .md file
+    turns?: EvalTurnConfig[];  // alternative to instruction — multi-turn eval
+    dataset?: string;       // path to .jsonl or .csv file — expands this task into one per row
     workspace?: WorkspaceMapping[];
     /** Context files injected into the workspace for the agent (docs, specs, schemas). Unlike workspace files which are evaluation fixtures, context files shape agent behavior. */
     context?: WorkspaceMapping[];
@@ -133,6 +140,12 @@ export interface ResolvedTask {
     environment: EnvironmentConfig;
     /** Directories that this task's relative paths resolve against, in order: its own file's dir, then the eval root. */
     baseDirs?: string[];
+    turns?: ResolvedTurn[];
+}
+
+export interface ResolvedTurn {
+    instruction: string;
+    graders: ResolvedGrader[];  // empty array if no graders for this turn
 }
 
 export interface ResolvedGrader {

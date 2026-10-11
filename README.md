@@ -1,6 +1,8 @@
 # Skillgrade
 
-The easiest way to evaluate your [Agent Skills](https://agentskills.io/home). Tests that AI agents correctly discover and use your skills.
+An eval harness for AI coding agents. Define tasks, run any agent, score with deterministic scripts, LLM judges, or human reviewers.
+
+Works with Gemini CLI, Claude Code, Codex CLI, OpenCode, any [ACP](https://agentclientprotocol.com/)-compatible agent, or any command-line tool — with or without [Agent Skills](https://agentskills.io/home).
 
 See [examples/](examples/) — [superlint](examples/superlint/) (simple) and [angular-modern](examples/angular-modern/) (TypeScript grader).
 
@@ -14,17 +16,16 @@ See [examples/](examples/) — [superlint](examples/superlint/) (simple) and [an
 npm i -g skillgrade
 ```
 
-**1. Initialize** — go to your skill directory (must have `SKILL.md`) and scaffold:
+**1. Initialize** — scaffold an `eval.yaml` in any directory:
 
 ```bash
-cd my-skill/
-GEMINI_API_KEY=your-key skillgrade init    # or ANTHROPIC_API_KEY / OPENAI_API_KEY
-# Use --force to overwrite an existing eval.yaml
+cd my-evals/
+skillgrade init
 ```
 
-Generates `eval.yaml` with AI-powered tasks and graders. Without an API key, creates a well-commented template.
+If a `SKILL.md` is present and an API key is set, `init` generates AI-powered tasks tailored to the skill. Otherwise, it creates a ready-to-edit template.
 
-**2. Edit** — customize `eval.yaml` for your skill (see [eval.yaml Reference](#evalyaml-reference)).
+**2. Edit** — define your tasks in `eval.yaml` (see [eval.yaml Reference](#evalyaml-reference)).
 
 **3. Run**:
 
@@ -41,7 +42,7 @@ skillgrade preview          # CLI report
 skillgrade preview browser  # web UI → http://localhost:3847
 ```
 
-Reports are saved to `$TMPDIR/skillgrade/<skill-name>/results/`. Override with `--output=DIR`.
+Reports are saved to `$TMPDIR/skillgrade/<eval-name>/results/`. Override with `--output=DIR`.
 
 ## Presets
 
@@ -56,7 +57,7 @@ Reports are saved to `$TMPDIR/skillgrade/<skill-name>/results/`. Override with `
 | Flag | Description |
 |------|-------------|
 | `--eval=NAME[,NAME]` | Run specific evals by name (comma-separated) |
-| `--grader=TYPE` | Run only graders of a type (`deterministic` or `llm_rubric`) |
+| `--grader=TYPE` | Run only graders of a type (`deterministic`, `llm_rubric`, or `human`) |
 | `--trials=N` | Override trial count |
 | `--parallel=N` | Run trials concurrently |
 | `--agent=gemini\|claude\|codex\|acp\|opencode\|command` | Override agent (default: auto-detect from API key) |
@@ -67,6 +68,7 @@ Reports are saved to `$TMPDIR/skillgrade/<skill-name>/results/`. Override with `
 | `--opencode-agent=NAME` | OpenCode agent (build\|plan\|explore) |
 | `--opencode-model=MODEL` | OpenCode model (provider/model format) |
 | `--output=DIR` | Output directory (default: `$TMPDIR/skillgrade`) |
+| `--format=FORMAT` | Export results (`json`, `junit`, `csv`, `markdown` — comma-separate for multiple) |
 | `--validate` | Verify graders using reference solutions |
 | `--ci` | CI mode: exit non-zero if below threshold |
 | `--threshold=0.8` | Pass rate threshold for CI mode |
@@ -77,7 +79,7 @@ Reports are saved to `$TMPDIR/skillgrade/<skill-name>/results/`. Override with `
 ```yaml
 version: "1"
 
-# Optional: explicit path to skill directory (defaults to auto-detecting SKILL.md)
+# Optional: path to a skill directory. Omit for non-skill evals.
 # skill: path/to/my-skill
 
 defaults:
@@ -114,6 +116,10 @@ tasks:
         dest: /usr/local/bin/superlint
         chmod: "+x"
 
+    context:                             # reference material for the agent
+      - src: specs/api-schema.yaml       # (not scored — just gives the agent context)
+        dest: api-schema.yaml
+
     graders:
       - type: deterministic
         setup: npm install typescript    # grader-specific deps (optional)
@@ -140,6 +146,82 @@ String values (`instruction`, `rubric`, `run`) support **file references** — i
 instruction: instructions/fix-linting.md
 rubric: rubrics/workflow-quality.md
 ```
+
+### Workspace vs Context
+
+Both `workspace` and `context` copy files into the agent's working directory, but they serve different roles:
+
+- **`workspace`** — evaluation fixtures. These are the files the agent works on and graders check against (source code, configs, test inputs).
+- **`context`** — reference material. Docs, specs, or schemas that shape how the agent approaches the task but aren't directly graded.
+
+```yaml
+tasks:
+  - name: implement-api
+    workspace:
+      - src: fixtures/app.js          # the file the agent edits
+        dest: app.js
+    context:
+      - src: specs/openapi.yaml       # reference the agent can read
+        dest: openapi.yaml
+```
+
+### Multi-turn evals
+
+A task can define `turns` instead of a single `instruction`. Each turn has its own instruction and optional graders. The agent's workspace persists across turns — turn 2 sees everything turn 1 produced.
+
+```yaml
+tasks:
+  - name: plan-then-implement
+    turns:
+      - instruction: |
+          Read the codebase and propose a refactoring plan. Write it to plan.md.
+        graders:
+          - type: llm_rubric
+            rubric: Is the plan well-structured and comprehensive?
+            weight: 0.3
+      - instruction: |
+          Implement the refactoring plan you wrote in plan.md.
+        graders:
+          - type: deterministic
+            run: bash graders/check-refactor.sh
+            weight: 0.7
+    workspace:
+      - src: fixtures/legacy-app/
+        dest: .
+```
+
+A task must have either `instruction` or `turns` — never both. Grader results from all turns are aggregated into the trial's final reward.
+
+Agents that implement the optional `runTurn()` method receive the turn index and all previous outputs for context. Agents without it fall back to the standard `run()` on each turn.
+
+### Dataset / batch support
+
+Expand a single task template into many tasks by loading rows from a JSONL or CSV file:
+
+```yaml
+tasks:
+  - name: code-review
+    dataset: datasets/review-cases.jsonl
+    instruction: |
+      Review this code and identify bugs:
+      ```
+      {{code}}
+      ```
+    graders:
+      - type: deterministic
+        run: node graders/check-review.mjs
+        weight: 1.0
+```
+
+`datasets/review-cases.jsonl`:
+```json
+{"code": "if (x = 5) { ... }", "expected_issues": "assignment in condition"}
+{"code": "arr[arr.length]", "expected_issues": "off-by-one"}
+```
+
+This expands to `code-review/0`, `code-review/1`, etc. Template variables use `{{key}}` syntax — each key in the row is interpolated into the instruction. Each row's full data becomes the task's `expected` field, so graders can access it via `SKILLGRADE_INPUT`.
+
+CSV files are also supported — the first row is treated as headers.
 
 ### Reference output and metadata
 
@@ -240,6 +322,8 @@ at the root.
 
 ## Graders
 
+Skillgrade ships with three grader types. Mix and weight them to score any dimension — correctness, code quality, workflow compliance, human judgment.
+
 ### Deterministic
 
 Runs a command and parses JSON from stdout:
@@ -313,6 +397,32 @@ The `provider` field selects which LLM API to call:
 
 `ANTHROPIC_BASE_URL` and `OPENAI_BASE_URL` enable custom/self-hosted endpoints (Ollama, vLLM, etc.). They apply to both LLM grading and `skillgrade init`.
 
+### Human
+
+Pauses the eval for manual review. The grader writes a context file with the agent's output and waits for a reviewer to score it:
+
+```yaml
+- type: human
+  prompt: |
+    Does the generated UI match the design spec?
+    Check layout, colors, and responsive behavior.
+  weight: 0.5
+```
+
+When a human grader runs, it:
+
+1. Writes the instruction, agent output, and commands to `<workspace>/.review/<task>-<trial>.json`
+2. Prints a banner with the file path and scoring instructions
+3. Polls for `<workspace>/.review/<task>-<trial>.result.json`
+
+The reviewer writes a standard grader result:
+
+```json
+{"score": 0.8, "details": "Layout matches, colors are off on mobile"}
+```
+
+Useful for evaluating subjective quality — design fidelity, UX, documentation clarity — that automated checks can't reliably measure.
+
 ### Combining Graders
 
 ```yaml
@@ -322,10 +432,66 @@ graders:
     weight: 0.7      # 70% — did it work?
   - type: llm_rubric
     rubric: rubrics/quality.md
-    weight: 0.3      # 30% — was the approach good?
+    weight: 0.2      # 20% — was the approach good?
+  - type: human
+    prompt: Is the output production-ready?
+    weight: 0.1      # 10% — human sign-off
 ```
 
 Final reward = `Σ (grader_score × weight) / Σ weight`
+
+## Extending Skillgrade
+
+All four extension points use the same registry pattern — register a factory function, use it by name:
+
+```typescript
+import {
+  registerGrader, registerAgent, registerProvider, registerReporter,
+  Grader, Reporter
+} from 'skillgrade';
+
+// Custom grader
+class MyGrader implements Grader {
+  async grade(workspace, provider, config, taskPath, sessionLog) {
+    return { grader_type: 'my_grader', score: 0.9, weight: config.weight, details: 'Passed' };
+  }
+}
+registerGrader('my_grader', () => new MyGrader());
+
+// Custom agent
+registerAgent('my-agent', (config) => new MyAgent(config));
+
+// Custom provider (e.g., SSH, E2B, cloud VMs)
+registerProvider('ssh', (config) => new SSHProvider(config));
+
+// Custom reporter
+class DashboardReporter implements Reporter {
+  async report(results, outputDir) {
+    // push to your dashboard
+    return path.join(outputDir, 'dashboard.json');
+  }
+}
+registerReporter('dashboard', () => new DashboardReporter());
+```
+
+## Report Formats
+
+Export results in multiple formats — use one or combine them:
+
+```bash
+skillgrade --smoke --format=json                 # JSON summary
+skillgrade --smoke --format=junit                # JUnit XML for CI dashboards
+skillgrade --smoke --format=csv                  # CSV for spreadsheets
+skillgrade --smoke --format=markdown             # Markdown report
+skillgrade --smoke --format=json,junit,markdown  # all three at once
+```
+
+| Format | Output File | Use Case |
+|--------|-------------|----------|
+| `json` | `summary.json` | Dashboards, trend tracking, programmatic access |
+| `junit` | `junit.xml` | CI systems (GitHub Actions, Jenkins, CircleCI) |
+| `csv` | `results.csv` | Spreadsheet analysis, data pipelines |
+| `markdown` | `report.md` | Documentation, PR comments, Slack posts |
 
 ## CI Integration
 
@@ -335,7 +501,7 @@ Use `--provider=local` in CI — the runner is already an ephemeral sandbox, so 
 # .github/workflows/skillgrade.yml
 - run: |
     npm i -g skillgrade
-    cd skills/superlint
+    cd evals/
     GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} skillgrade --regression --ci --provider=local
 ```
 
@@ -359,11 +525,11 @@ Exits with code 1 if pass rate falls below `--threshold` (default: 0.8).
 | `OPENAI_MODEL` | Override the default model used for OpenAI LLM grading (defaults to dynamic API lookup; throws if resolution fails) |
 | `INIT_OPENAI_MODEL` | Override the model used for OpenAI in `skillgrade init` (defaults to `OPENAI_MODEL` or dynamic API lookup; throws if resolution fails) |
 
-Variables are also loaded from `.env` in the skill directory. Shell values override `.env`. All values are **redacted** from persisted session logs.
+Variables are also loaded from `.env` in the working directory. Shell values override `.env`. All values are **redacted** from persisted session logs.
 
 ## Custom Command Agent
 
-Bring your own agent. The built-in adapters (`gemini`, `claude`, `codex`, ...) cover the popular CLIs, but you can point skillgrade at **any command** — a custom script, a [deepagents](https://github.com/langchain-ai/deepagents) loop, or a small orchestrator over the Claude/OpenAI SDKs — without forking the package or implementing an ACP server.
+Point skillgrade at **any command** — a custom script, an orchestrator over the Claude/OpenAI SDKs, or any CLI tool — without forking the package or implementing an ACP server.
 
 ### Quick Start
 
@@ -453,7 +619,7 @@ Models are specified in `provider/model` format:
 
 ## ACP Agent
 
-[Agent Client Protocol (ACP)](https://agentclientprotocol.com/) is an open protocol that standardizes communication between AI coding agents and clients. Using an ACP-compatible agent allows you to evaluate skills without managing API keys directly.
+[Agent Client Protocol (ACP)](https://agentclientprotocol.com/) is an open protocol that standardizes communication between AI coding agents and clients. Using an ACP-compatible agent allows you to evaluate agents without managing API keys directly.
 
 ### Quick Start
 
@@ -502,6 +668,7 @@ The `--acp-command` can also be set in `eval.yaml` under `defaults.acp.command`.
 - **Instructions must name output files.** If the grader checks for `output.html`, the instruction must tell the agent to save as `output.html`.
 - **Validate graders first.** Use `--validate` with a reference solution before running real evals.
 - **Start small.** 3–5 well-designed tasks beat 50 noisy ones.
+- **Combine grader types.** Deterministic for correctness, LLM for quality, human for subjective judgment — weight each to match what matters.
 
 For a comprehensive guide on writing high-quality skills, check out [skills-best-practices](https://github.com/mgechev/skills-best-practices/). You can also install the skill creator skill to help author skills:
 

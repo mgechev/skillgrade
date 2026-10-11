@@ -1,7 +1,7 @@
 {
   "name": "skillgrade",
-  "version": "0.3.1",
-  "description": "The easiest way to evaluate your Agent Skills — test that AI agents correctly discover and use your skills",
+  "version": "0.5.0",
+  "description": "The easiest way to evaluate your Agent Skills and AI agents — test that AI agents correctly discover and use your skills, or evaluate any agent against custom tasks",
   "main": "dist/skillgrade.js",
   "types": "dist/skillgrade.d.ts",
   "bin": {

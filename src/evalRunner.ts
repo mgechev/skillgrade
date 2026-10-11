@@ -2,62 +2,19 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import {
     BaseAgent, EnvironmentProvider,
-    LogEntry, TrialResult, EvalReport, GraderResult, AgentResult
+    LogEntry, TrialResult, EvalReport, GraderResult, AgentResult, CommandResult
 } from './types';
-import { ResolvedGrader } from './core/config.types';
-import { getGrader } from './graders';
+import { ResolvedGrader, ResolvedTurn } from './core/config.types';
 import { fmt, Spinner } from './utils/cli';
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-        const timer = setTimeout(() => {
-            reject(new Error(`${label} timed out after ${timeoutMs / 1000}s`));
-        }, timeoutMs);
-
-        promise.then(
-            (val) => { clearTimeout(timer); resolve(val); },
-            (err) => { clearTimeout(timer); reject(err); }
-        );
-    });
-}
-
-/**
- * Calculate pass@k: probability of at least 1 success in k trials
- * Using unbiased estimator: 1 - C(n-c, k) / C(n, k)
- */
-function calculatePassAtK(n: number, c: number, k: number): number {
-    if (n - c < k) return 1.0;
-    let result = 1.0;
-    for (let i = 0; i < k; i++) {
-        result *= (n - c - i) / (n - i);
-    }
-    return 1.0 - result;
-}
-
-/**
- * Calculate pass^k: probability that all k trials succeed
- */
-function calculatePassPowK(n: number, c: number, k: number): number {
-    const p = c / n;
-    return Math.pow(p, k);
-}
-
-/** Estimate token count from text (~4 chars per token) */
-function estimateTokens(text: string): number {
-    return Math.ceil(text.length / 4);
-}
-
-/** Normalize agent output to AgentResult format */
-function normalizeAgentOutput(raw: string | AgentResult): AgentResult {
-    if (typeof raw === 'string') {
-        return {
-            output: raw,
-            skills_triggered: [],
-            tools_used: [],
-        };
-    }
-    return raw;
-}
+import {
+    withTimeout,
+    calculatePassAtK,
+    calculatePassPowK,
+    estimateTokens,
+    normalizeAgentOutput,
+    executeGraders,
+    sanitizeReport
+} from './evalHelpers';
 
 /** Options for running an eval */
 export interface EvalRunOptions {
@@ -73,6 +30,7 @@ export interface EvalRunOptions {
         cpus: number;
         memory_mb: number;
     };
+    turns?: ResolvedTurn[];  // if present, run multi-turn instead of single instruction
 }
 
 export class EvalRunner {
@@ -143,7 +101,7 @@ export class EvalRunner {
         };
 
         if (this.logDir) {
-            const sanitized = this.sanitize(report, env);
+            const sanitized = sanitizeReport(report, env);
             await this.saveReport(sanitized);
         }
 
@@ -173,7 +131,113 @@ export class EvalRunner {
         return results;
     }
 
-    private async runSingleTrial(
+    private createCommandRunner(
+        workspace: string,
+        sessionLog: LogEntry[],
+        env?: Record<string, string>,
+        onCommand?: () => void
+    ): (cmd: string, cmdEnv?: Record<string, string>) => Promise<CommandResult> {
+        return async (cmd: string, cmdEnv?: Record<string, string>) => {
+            const mergedEnv = cmdEnv ? { ...(env || {}), ...cmdEnv } : env;
+            const result = await this.provider.runCommand(workspace, cmd, mergedEnv);
+            onCommand?.();
+            sessionLog.push({
+                type: 'command',
+                timestamp: this.timestamp(),
+                command: cmd,
+                stdout: result.stdout,
+                stderr: result.stderr,
+                exitCode: result.exitCode,
+            });
+            return result;
+        };
+    }
+
+
+    private finalizeTrial(
+        trialId: number,
+        graderResults: GraderResult[],
+        sessionLog: LogEntry[],
+        startTime: number,
+        commandCount: number,
+        instructionText: string,
+        spinner: Spinner
+    ): TrialResult {
+        const totalWeight = graderResults.reduce((sum, r) => sum + r.weight, 0);
+        const reward = totalWeight > 0
+            ? graderResults.reduce((sum, r) => sum + r.score * r.weight, 0) / totalWeight
+            : 0;
+
+        sessionLog.push({
+            type: 'reward',
+            timestamp: this.timestamp(),
+            value: reward,
+        });
+
+        const duration_ms = Date.now() - startTime;
+        const input_tokens = estimateTokens(instructionText);
+        const output_tokens = sessionLog
+            .filter(e => e.type === 'agent_result' || e.type === 'command')
+            .reduce((sum, e) => sum + estimateTokens((e.output || '') + (e.stdout || '') + (e.stderr || '')), 0);
+
+        const status = reward >= 0.5 ? fmt.pass('PASS') : fmt.fail('FAIL');
+        spinner.stop(`${status}  ${fmt.bold(reward.toFixed(2))}  ${fmt.dim((duration_ms / 1000).toFixed(1) + 's')}  ${fmt.dim(commandCount + ' cmds')}`);
+
+        return {
+            trial_id: trialId,
+            reward,
+            grader_results: graderResults,
+            duration_ms,
+            n_commands: commandCount,
+            input_tokens,
+            output_tokens,
+            session_log: sessionLog,
+        };
+    }
+
+    private async handleTrialError(
+        err: unknown,
+        trialId: number,
+        workspace: string,
+        startTime: number,
+        commandCount: number,
+        sessionLog: LogEntry[],
+        spinner: Spinner
+    ): Promise<TrialResult> {
+        const duration_ms = Date.now() - startTime;
+        const errorMsg = (err as any)?.message || String(err);
+        spinner.stop(`${fmt.fail('FAIL')}  ${errorMsg.substring(0, 50)}  ${fmt.dim((duration_ms / 1000).toFixed(1) + 's')}`);
+
+        let diagnostics = '';
+        if (this.provider.diagnose) {
+            try {
+                diagnostics = await this.provider.diagnose(workspace);
+                console.log(diagnostics);
+            } catch (e) {
+                diagnostics = `(diagnostics failed: ${e})`;
+            }
+        }
+
+        sessionLog.push({
+            type: 'reward',
+            timestamp: this.timestamp(),
+            value: 0,
+            output: diagnostics ? `${errorMsg}\n\n${diagnostics}` : errorMsg,
+        });
+
+        return {
+            trial_id: trialId,
+            reward: 0,
+            grader_results: [],
+            duration_ms,
+            n_commands: commandCount,
+            input_tokens: 0,
+            output_tokens: 0,
+            session_log: sessionLog,
+        };
+    }
+
+    private async runMultiTurnTrial(
         agent: BaseAgent,
         taskPath: string,
         skillsPaths: string[],
@@ -185,37 +249,104 @@ export class EvalRunner {
         const sessionLog: LogEntry[] = [];
         let commandCount = 0;
         const startTime = Date.now();
+        const spinner = new Spinner(`${index + 1}/${total}`, 'setting up environment');
+        const workspace = await this.provider.setup(taskPath, skillsPaths, opts, env);
+        const turns = opts.turns || [];
+        const previousOutputs: string[] = [];
+        const allGraderResults: GraderResult[] = [];
+
+        try {
+            const loggedRunCommand = this.createCommandRunner(workspace, sessionLog, env, () => commandCount++);
+            const agentTimeoutMs = opts.timeoutSec * 1000;
+
+            for (let turnIdx = 0; turnIdx < turns.length; turnIdx++) {
+                const turn = turns[turnIdx];
+                spinner.update(`running turn ${turnIdx + 1}/${turns.length}`);
+                sessionLog.push({
+                    type: 'turn_start',
+                    timestamp: this.timestamp(),
+                    instruction: turn.instruction,
+                    turn_index: turnIdx,
+                });
+
+                const agentRaw = await withTimeout(
+                    agent.runTurn
+                        ? agent.runTurn(turn.instruction, workspace, loggedRunCommand, turnIdx, [...previousOutputs])
+                        : agent.run(turn.instruction, workspace, loggedRunCommand),
+                    agentTimeoutMs,
+                    `Agent turn ${turnIdx + 1} (limit: ${opts.timeoutSec}s)`
+                );
+                const agentResult = normalizeAgentOutput(agentRaw);
+                previousOutputs.push(agentResult.output);
+
+                sessionLog.push({
+                    type: 'agent_result',
+                    timestamp: this.timestamp(),
+                    output: agentResult.output,
+                });
+
+                if (turn.graders && turn.graders.length > 0) {
+                    const turnResults = await executeGraders(
+                        this.provider, turn.graders, workspace, taskPath, index, opts, sessionLog, () => this.timestamp(), env, spinner
+                    );
+                    allGraderResults.push(...turnResults);
+                }
+
+                sessionLog.push({
+                    type: 'turn_end',
+                    timestamp: this.timestamp(),
+                    turn_index: turnIdx,
+                });
+            }
+
+            if (opts.graders && opts.graders.length > 0) {
+                const topResults = await executeGraders(
+                    this.provider, opts.graders, workspace, taskPath, index, opts, sessionLog, () => this.timestamp(), env, spinner
+                );
+                allGraderResults.push(...topResults);
+            }
+
+            const totalInstructionText = turns.map(t => t.instruction).join('\n');
+            return this.finalizeTrial(index + 1, allGraderResults, sessionLog, startTime, commandCount, totalInstructionText, spinner);
+        } catch (err: unknown) {
+            return await this.handleTrialError(err, index + 1, workspace, startTime, commandCount, sessionLog, spinner);
+        } finally {
+            await this.provider.cleanup(workspace);
+        }
+    }
+
+    private async runSingleTrial(
+        agent: BaseAgent,
+        taskPath: string,
+        skillsPaths: string[],
+        opts: EvalRunOptions,
+        index: number,
+        total: number,
+        env?: Record<string, string>
+    ): Promise<TrialResult> {
+        if (opts.turns && opts.turns.length > 0) {
+            return this.runMultiTurnTrial(agent, taskPath, skillsPaths, opts, index, total, env);
+        }
+
+        const sessionLog: LogEntry[] = [];
+        let commandCount = 0;
+        const startTime = Date.now();
 
         const spinner = new Spinner(`${index + 1}/${total}`, 'setting up environment');
         const workspace = await this.provider.setup(taskPath, skillsPaths, opts, env);
 
         try {
-            const instruction = opts.instruction;
-
             sessionLog.push({
                 type: 'agent_start',
                 timestamp: this.timestamp(),
-                instruction
+                instruction: opts.instruction,
             });
 
             spinner.update('running agent');
-            const loggedRunCommand = async (cmd: string) => {
-                const result = await this.provider.runCommand(workspace, cmd, env);
-                commandCount++;
-                sessionLog.push({
-                    type: 'command',
-                    timestamp: this.timestamp(),
-                    command: cmd,
-                    stdout: result.stdout,
-                    stderr: result.stderr,
-                    exitCode: result.exitCode
-                });
-                return result;
-            };
-
+            const loggedRunCommand = this.createCommandRunner(workspace, sessionLog, env, () => commandCount++);
             const agentTimeoutMs = opts.timeoutSec * 1000;
             const agentRaw = await withTimeout(
-                agent.run(instruction, workspace, loggedRunCommand),
+                agent.run(opts.instruction, workspace, loggedRunCommand),
                 agentTimeoutMs,
                 `Agent (limit: ${opts.timeoutSec}s)`
             );
@@ -224,158 +355,18 @@ export class EvalRunner {
             sessionLog.push({
                 type: 'agent_result',
                 timestamp: this.timestamp(),
-                output: agentResult.output
+                output: agentResult.output,
             });
 
-            // Run all graders
-            const graderResults: GraderResult[] = [];
-
-            for (let gIdx = 0; gIdx < opts.graders.length; gIdx++) {
-                const graderDef = opts.graders[gIdx];
-                const grader = getGrader(graderDef.type);
-                spinner.update(`grading (${graderDef.type}${opts.graders.length > 1 ? ` ${gIdx + 1}/${opts.graders.length}` : ''})`);
-
-                // Build grader config with file references for execution
-                const detIndex = opts.graders.slice(0, gIdx).filter(g => g.type === 'deterministic').length;
-                const llmIndex = opts.graders.slice(0, gIdx).filter(g => g.type === 'llm_rubric').length;
-
-                const graderConfig = {
-                    type: graderDef.type,
-                    command: graderDef.type === 'deterministic'
-                        ? `bash tests/${detIndex === 0 ? 'test.sh' : `test_${detIndex}.sh`}`
-                        : undefined,
-                    rubric: graderDef.type === 'llm_rubric'
-                        ? `prompts/${llmIndex === 0 ? 'quality.md' : `quality_${llmIndex}.md`}`
-                        : undefined,
-                    model: graderDef.model || opts.graderModel,
-                    provider: graderDef.provider || opts.graderProvider,
-                    weight: graderDef.weight,
-                    // Assembled here, after the agent has exited — so the
-                    // reference answer cannot reach the agent.
-                    input: {
-                        task: path.basename(taskPath),
-                        trial: index,
-                        expected: opts.expected,
-                        metadata: opts.metadata,
-                    },
-                };
-
-                const graderTimeoutMs = (opts.graderTimeoutSec ?? 120) * 1000;
-                const result = await withTimeout(
-                    grader.grade(workspace, this.provider, graderConfig, taskPath, sessionLog, env),
-                    graderTimeoutMs,
-                    `Grader ${graderDef.type} (limit: ${opts.graderTimeoutSec ?? 120}s)`
-                );
-                graderResults.push(result);
-
-                sessionLog.push({
-                    type: 'grader',
-                    timestamp: this.timestamp(),
-                    grader_result: result
-                });
-            }
-
-            // Calculate weighted reward
-            const totalWeight = graderResults.reduce((sum, r) => sum + r.weight, 0);
-            const reward = totalWeight > 0
-                ? graderResults.reduce((sum, r) => sum + r.score * r.weight, 0) / totalWeight
-                : 0;
-
-            sessionLog.push({
-                type: 'reward',
-                timestamp: this.timestamp(),
-                value: reward
-            });
-
-            const duration_ms = Date.now() - startTime;
-
-            const input_tokens = estimateTokens(instruction);
-            const output_tokens = sessionLog
-                .filter(e => e.type === 'agent_result' || e.type === 'command')
-                .reduce((sum, e) => sum + estimateTokens((e.output || '') + (e.stdout || '') + (e.stderr || '')), 0);
-
-            const status = reward >= 0.5 ? fmt.pass('PASS') : fmt.fail('FAIL');
-            spinner.stop(`${status}  ${fmt.bold(reward.toFixed(2))}  ${fmt.dim((duration_ms / 1000).toFixed(1) + 's')}  ${fmt.dim(commandCount + ' cmds')}`);
-
-            return {
-                trial_id: index + 1,
-                reward,
-                grader_results: graderResults,
-                duration_ms,
-                n_commands: commandCount,
-                input_tokens,
-                output_tokens,
-                session_log: sessionLog
-            };
-        } catch (err: any) {
-            const duration_ms = Date.now() - startTime;
-            const errorMsg = err?.message || String(err);
-            spinner.stop(`${fmt.fail('FAIL')}  ${errorMsg.substring(0, 50)}  ${fmt.dim((duration_ms / 1000).toFixed(1) + 's')}`);
-
-
-            let diagnostics = '';
-            if (this.provider.diagnose) {
-                try {
-                    diagnostics = await this.provider.diagnose(workspace);
-                    console.log(diagnostics);
-                } catch (e) {
-                    diagnostics = `(diagnostics failed: ${e})`;
-                }
-            }
-
-            sessionLog.push({
-                type: 'reward',
-                timestamp: this.timestamp(),
-                value: 0,
-                output: diagnostics ? `${errorMsg}\n\n${diagnostics}` : errorMsg
-            });
-
-            return {
-                trial_id: index + 1,
-                reward: 0,
-                grader_results: [],
-                duration_ms,
-                n_commands: commandCount,
-                input_tokens: 0,
-                output_tokens: 0,
-                session_log: sessionLog
-            };
+            const graderResults = await executeGraders(
+                this.provider, opts.graders, workspace, taskPath, index, opts, sessionLog, () => this.timestamp(), env, spinner
+            );
+            return this.finalizeTrial(index + 1, graderResults, sessionLog, startTime, commandCount, opts.instruction, spinner);
+        } catch (err: unknown) {
+            return await this.handleTrialError(err, index + 1, workspace, startTime, commandCount, sessionLog, spinner);
         } finally {
             await this.provider.cleanup(workspace);
         }
-    }
-
-    private sanitize(report: EvalReport, env?: Record<string, string>): EvalReport {
-        if (!env) return report;
-
-        const sanitized = JSON.parse(JSON.stringify(report));
-        const secrets = Object.values(env);
-
-        const redact = (text: string) => {
-            let result = text;
-            for (const secret of secrets) {
-                if (secret && secret.length > 5) {
-                    result = result.split(secret).join('[REDACTED]');
-                }
-            }
-            return result;
-        };
-
-        for (const trial of sanitized.trials) {
-            for (const entry of trial.session_log) {
-                if (entry.instruction) entry.instruction = redact(entry.instruction);
-                if (entry.command) entry.command = redact(entry.command);
-                if (entry.stdout) entry.stdout = redact(entry.stdout);
-                if (entry.stderr) entry.stderr = redact(entry.stderr);
-                if (entry.output) entry.output = redact(entry.output);
-                if (entry.grader_result?.details) entry.grader_result.details = redact(entry.grader_result.details);
-            }
-            for (const gr of trial.grader_results) {
-                if (gr.details) gr.details = redact(gr.details);
-            }
-        }
-
-        return sanitized;
     }
 
     private async saveReport(report: EvalReport): Promise<void> {

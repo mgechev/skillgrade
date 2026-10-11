@@ -1,0 +1,4 @@
+input,expected_output
+hello,HELLO
+world,WORLD
+foo,FOO

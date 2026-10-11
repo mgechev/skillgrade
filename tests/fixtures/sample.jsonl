@@ -1,0 +1,3 @@
+{"input": "hello", "expected_output": "HELLO"}
+{"input": "world", "expected_output": "WORLD"}
+{"input": "foo", "expected_output": "FOO"}

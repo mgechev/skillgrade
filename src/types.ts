@@ -37,7 +37,7 @@ export interface GraderResult {
 }
 
 export interface LogEntry {
-    type: 'agent_start' | 'command' | 'agent_result' | 'grader' | 'reward';
+    type: 'agent_start' | 'command' | 'agent_result' | 'grader' | 'reward' | 'turn_start' | 'turn_end';
     timestamp: string;
     instruction?: string;
     command?: string;
@@ -47,6 +47,7 @@ export interface LogEntry {
     output?: string;
     value?: number;
     grader_result?: GraderResult;
+    turn_index?: number;
 }
 
 export interface TrialResult {
@@ -97,6 +98,15 @@ export abstract class BaseAgent {
         instruction: string,
         workspacePath: string,
         runCommand: (cmd: string, env?: Record<string, string>) => Promise<CommandResult>
+    ): Promise<string | AgentResult>;
+
+    /** Optional: run a single turn in a multi-turn conversation. Default delegates to run(). */
+    runTurn?(
+        instruction: string,
+        workspacePath: string,
+        runCommand: (cmd: string, env?: Record<string, string>) => Promise<CommandResult>,
+        turnIndex: number,
+        previousOutputs: string[]
     ): Promise<string | AgentResult>;
 }
 

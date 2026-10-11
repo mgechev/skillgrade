@@ -9,12 +9,12 @@ import * as os from 'os';
 import { loadEvalConfig, resolveTask } from '../core/config';
 import { TaskFilter, describeSelection, metadataKeys, selectTasks } from '../core/filter';
 import { detectSkills } from '../core/skills';
-import { DockerProvider } from '../providers/docker';
-import { LocalProvider } from '../providers/local';
+import { getProvider } from '../providers/registry';
 import { EvalRunner, EvalRunOptions } from '../evalRunner';
 import { createAgent, AgentConfig } from '../agents/registry';
 import { BaseAgent, EvalReport } from '../types';
-import { ResolvedTask } from '../core/config.types';
+import { getReporter } from '../reporters';
+import { ResolvedTask, ResolvedGrader } from '../core/config.types';
 import { parseEnvFile } from '../utils/env';
 import { fmt, header, kv, progress, resultsSummary, validationResult } from '../utils/cli';
 
@@ -41,7 +41,7 @@ interface RunOptions {
     command?: string;    // command agent command (e.g., "node mycli.js")
     openCodeAgent?: string;   // OpenCode agent (build|plan|explore)
     openCodeModel?: string;   // OpenCode model (provider/model format)
-    format?: 'json';     // output format for results
+    format?: string;     // output format for results
 }
 
 async function loadEnvFile(filePath: string): Promise<Record<string, string>> {
@@ -154,18 +154,25 @@ export async function runEvals(dir: string, opts: RunOptions) {
         const tmpTaskDir = path.join(outputDir, 'tmp', resolved.name);
         await prepareTempTaskDir(resolved, dir, tmpTaskDir);
 
+        const filterGraders = (graders: ResolvedGrader[]) =>
+            opts.grader ? graders.filter(g => g.type === opts.grader) : graders;
+
         // Build eval options — pass resolved content directly
         const evalOpts: EvalRunOptions = {
             instruction: resolved.instruction,
-            graders: opts.grader
-                ? resolved.graders.filter(g => g.type === opts.grader)
-                : resolved.graders,
+            graders: filterGraders(resolved.graders),
             timeoutSec: resolved.timeout,
             graderModel: resolved.grader_model,
             graderProvider: resolved.grader_provider,
             expected: resolved.expected,
             metadata: resolved.metadata,
             environment: resolved.environment,
+            turns: resolved.turns
+                ? resolved.turns.map(t => ({
+                    instruction: t.instruction,
+                    graders: filterGraders(t.graders),
+                }))
+                : undefined,
         };
 
         // Pick agent: CLI flag > task-level override > auto-detect from API key > default
@@ -230,9 +237,7 @@ export async function runEvals(dir: string, opts: RunOptions) {
         }
 
         // Pick provider
-        const provider = providerName === 'docker'
-            ? new DockerProvider()
-            : new LocalProvider();
+        const provider = getProvider(providerName);
 
         const runner = new EvalRunner(provider, resultsDir);
 
@@ -313,11 +318,22 @@ export async function runEvals(dir: string, opts: RunOptions) {
     }
 
     // Export results in requested format
-    if (opts.format === 'json') {
+    const requestedFormats = opts.format
+        ? opts.format.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+        : [];
+
+    if (requestedFormats.includes('json') || opts.format === 'json') {
         const jsonOutput = JSON.stringify(reports, null, 2);
         const jsonPath = path.join(resultsDir, 'summary.json');
         await fs.writeJSON(jsonPath, reports, { spaces: 2 });
         console.log(`\n  ${fmt.dim('JSON report:')} ${jsonPath}\n`);
+    }
+
+    for (const fmtName of requestedFormats) {
+        if (fmtName === 'json') continue;
+        const reporter = getReporter(fmtName);
+        const reportPath = await reporter.report(reports, resultsDir);
+        console.log(`  ${fmt.dim(`${fmtName.toUpperCase()} report:`)} ${reportPath}\n`);
     }
 }
 
